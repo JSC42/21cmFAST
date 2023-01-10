@@ -410,7 +410,7 @@ class TsBox(_AllParamsBox):
             "x_e_box": shape,
             "Tk_box": shape,
             "J_21_LW_box": shape,
-            "Boost_Box": shape,
+            "Boost_box": shape,
         }
 
     @cached_property
@@ -426,10 +426,10 @@ class TsBox(_AllParamsBox):
     @cached_property
     def global_Boost(self):
         """Global (mean) DM annihilation Boost Factor."""
-        if "Boost_Box" not in self._computed_arrays:
-            raise AttributeError("Boost_Box not found")
+        if "Boost_box" not in self._computed_arrays:
+            raise AttributeError("Boost_box not found")
         else:
-            return np.mean(self.Boost_Box)
+            return np.mean(self.Boost_box)
 
     @cached_property
     def global_Tk(self):

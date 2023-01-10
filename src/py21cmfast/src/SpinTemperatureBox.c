@@ -556,7 +556,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                             this_spin_temp->Ts_box[HII_R_INDEX(i, j, k)] = get_Ts(redshift,
                                                                                   perturbed_field->density[HII_R_INDEX(i, j, k)] * inverse_growth_factor_z * growth_factor_zp,
                                                                                   TK, xe, 0, &curr_xalpha);
-                            this_spin_temp->Boost_Box[HII_R_INDEX(i, j, k)] = 1.0;
+                            this_spin_temp->Boost_box[HII_R_INDEX(i, j, k)] = 1.0;
                         }
                     }
                 }

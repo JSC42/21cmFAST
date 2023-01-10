@@ -1964,6 +1964,8 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                         Delta_Max = 0.0;
                         for (box_ct = 0; box_ct < HII_TOT_NUM_PIXELS; box_ct++)
                         {
+                            LOG_ERROR("Error_code_1967!");
+                            Throw(InfinityorNaNError);
                             if (user_params->MINIMIZE_MEMORY)
                             {
                                 curr_dens = delNL0[0][box_ct] * zpp_growth[R_ct];
@@ -2003,11 +2005,11 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                         GridDelta = Delta_Min;
                         for (idx = 0; idx < Boost_Table_Size; idx++)
                         {
-                            Boost_Table[idx] = (Reset_MinM, Maximum_Mh, zpp_growth[0], redshift, GridDelta, PBH_sigmaMmax, cosmo_params, -1);
+                            Boost_Table[idx] = FindBoost(Reset_MinM, Maximum_Mh, zpp_growth[0], redshift, GridDelta, PBH_sigmaMmax, cosmo_params, -1);
                             GridDelta += Delta_Step;
                         }
                         // Find the Boost for user HMF
-                        Boost_User = (Reset_MinM, Maximum_Mh, zpp_growth[0], redshift, 0.0, PBH_sigmaMmax, cosmo_params, user_params->HMF);
+                        Boost_User = FindBoost(Reset_MinM, Maximum_Mh, zpp_growth[0], redshift, 0.0, PBH_sigmaMmax, cosmo_params, user_params->HMF);
                         Boost_ave = 0.0;
                         for (box_ct = 0; box_ct < HII_TOT_NUM_PIXELS; box_ct++)
                         {
@@ -2023,23 +2025,21 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                             Boost_ave += Grid_Boost;
                             this_spin_temp->Boost_box[box_ct] = Grid_Boost;
                         }
-                        Boost_ave = Boost_ave / ((double) HII_TOT_NUM_PIXELS);
+                        Boost_ave = Boost_ave / ((double)HII_TOT_NUM_PIXELS);
 
                         // Normalise the Boost
                         for (box_ct = 0; box_ct < HII_TOT_NUM_PIXELS; box_ct++)
                         {
-                           if (Boost_ave < 1E-15)
-                           {
-                            // Technically this shouldn't happen
-                            this_spin_temp->Boost_box[box_ct] = Boost_ave;
-                           }
-                           else
-                           {
-                            this_spin_temp->Boost_box[box_ct] = Boost_User * this_spin_temp->Boost_box[box_ct] / Boost_ave;
-                           }
-
+                            if (Boost_ave < 1E-15)
+                            {
+                                // Technically this shouldn't happen
+                                this_spin_temp->Boost_box[box_ct] = Boost_ave;
+                            }
+                            else
+                            {
+                                this_spin_temp->Boost_box[box_ct] = Boost_User * this_spin_temp->Boost_box[box_ct] / Boost_ave;
+                            }
                         }
-
                     }
 
 #pragma omp parallel shared(delNL0, zpp_growth, SFRD_z_high_table, fcoll_interp_high_min, fcoll_interp_high_bin_width_inv, log10_SFRD_z_low_table,                                                                                                                                     \

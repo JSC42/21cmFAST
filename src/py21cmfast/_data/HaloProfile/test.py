@@ -3,7 +3,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from colossus.cosmology import cosmology
 from colossus.halo import profile_nfw
-
 cosmo = cosmology.setCosmology('planck18')
 
 Mvir = 1E15

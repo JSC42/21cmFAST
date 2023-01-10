@@ -105,42 +105,19 @@ def IntegrateProfile(m,z):
   h=0.6766
   OmC=0.261
   RhoCr=1.879E-26 *h**2
-  try:
-    r,rho = GetConvergedProfile(m,z)
-    fun=r**2 * rho**2
-    return np.trapz(y=fun,x=r)
-  except:
-    print("JSC Warning: Something went wrong!")
-    return 0
+  print(m,z)
+  #try:
+  r,rho = GetConvergedProfile(m,z)
+  fun=r**2 * rho**2
+  return np.trapz(y=fun,x=r)
+  #except:
+  #  print("Sth went wrong!")
+  #  return 0
 
 
 # ---- Start the run ----
-lm1=0
-lm2=16.69
-nm=100
-z1=0
-z2=35
-nz=40
-FileName='tmp.m'
-try:
-  os.remove(FileName)
-except:
-  pass
+M1=1E5
+z1=25.25
+a=IntegrateProfile(M1,z1)
+print(a)
 
-M=10**np.arange(lm1,lm2,(lm2-lm1)/(nm-1))
-z=np.arange(z1,z2,(z2-z1)/(nz-1))
-# Tab=np.array((nm,nz),'double')
-F=open(FileName,'w')
-
-mid=0
-for M_ in M:
-  print(mid/nm)
-  zid=0
-  for z_ in z:
-    Data=IntegrateProfile(M_,z_)
-    # This is stupid but all other methods (etc.h5) have failed
-    print("Tab(",zid+1,",",mid+1,")=",Data,";",file=F)
-    # print(z_,np.log10(M_),Data)
-    zid=zid+1
-  mid=mid+1
-F.close()

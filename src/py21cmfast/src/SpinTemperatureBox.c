@@ -67,7 +67,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
         FILE *F, *OUT;
 
         unsigned long long ct, FCOLL_SHORT_FACTOR, box_ct;
-        double Delta_Max, Delta_Min, Maximum_Mh, PBH_sigmaMmax;
+        double Delta_Max, Delta_Min, Maximum_Mh, PBH_sigmaMmax, Reset_MinM;
         int R_values_ready;
 
         int R_ct, i, ii, j, k, i_z, COMPUTE_Ts, x_e_ct, m_xHII_low, m_xHII_high, n_ct, zpp_gridpoint1_int;
@@ -863,7 +863,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                     }
                     else
                     {
-                        f(Reset_MinM > 0)
+                        if(Reset_MinM > 0)
                         {
                             initialiseSigmaMInterpTable(Reset_MinM, 1e20);
                         }

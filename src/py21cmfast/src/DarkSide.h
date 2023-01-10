@@ -1,4 +1,4 @@
-#include "ProfileTable.h5"
+#include "ProfileTable.h"
 #define Integration_TimeStep 10000
 #define Use_DarkSide 1
 double Interp_Fast(double *Tab, double xmin, double xmax, int nx, double x)
@@ -134,7 +134,7 @@ double FindBoost(double M1, double M2, double growthf, double z, double Delta, d
 
 		// The value of your function in requested mass
 		m = exp(lnm);
-		fun = InterpProfile(,m);
+		fun = InterpProfile(z,m);
 
 		if (hmf_model == -1)
 		{
@@ -175,5 +175,5 @@ double FindBoost(double M1, double M2, double growthf, double z, double Delta, d
 	result = result * dlnm;
 
 	// Converting from Mpc to m
-	return 1 + ConversionFactor * result/((pow(cosmo_params->OMm-cosmo_params->OMb),2) * (pow(cosmo_params->hlittle, 4)) pow(1+z,3));
+	return 1 + ConversionFactor * result/((pow(cosmo_params->OMm-cosmo_params->OMb,2)) * (pow(cosmo_params->hlittle, 4)) * pow(1+z,3));
 }

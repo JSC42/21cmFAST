@@ -410,6 +410,7 @@ class TsBox(_AllParamsBox):
             "x_e_box": shape,
             "Tk_box": shape,
             "J_21_LW_box": shape,
+            "Boost_Box": shape,
         }
 
     @cached_property
@@ -421,6 +422,14 @@ class TsBox(_AllParamsBox):
             )
         else:
             return np.mean(self.Ts_box)
+
+    @cached_property
+    def global_Boost(self):
+        """Global (mean) DM annihilation Boost Factor."""
+        if "Boost_Box" not in self._computed_arrays:
+            raise AttributeError("Boost_Box not found")
+        else:
+            return np.mean(self.Boost_Box)
 
     @cached_property
     def global_Tk(self):
@@ -457,6 +466,7 @@ class TsBox(_AllParamsBox):
             required += [
                 "Tk_box",
                 "x_e_box",
+                "Boost_box",
             ]
             if self.flag_options.USE_MINI_HALOS:
                 required += ["J_21_LW_box"]
@@ -567,7 +577,7 @@ class IonizedBox(_AllParamsBox):
         elif isinstance(input_box, PerturbedField):
             required += ["density"]
         elif isinstance(input_box, TsBox):
-            required += ["J_21_LW_box", "x_e_box", "Tk_box"]
+            required += ["J_21_LW_box", "x_e_box", "Tk_box", "Boost_box"]
         elif isinstance(input_box, IonizedBox):
             required += ["z_re_box", "Gamma12_box"]
             if self.flag_options.INHOMO_RECO:

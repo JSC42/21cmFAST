@@ -1,6 +1,8 @@
 #include "ProfileTable.h"
 #define Integration_TimeStep 10000
 #define Use_DarkSide 1
+#define Boost_Table_Size 1000
+
 double Interp_Fast(double *Tab, double xmin, double xmax, int nx, double x)
 {
 	// Interpolate, x axis must be linear in [xmin xmax] with size nx

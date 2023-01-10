@@ -67,8 +67,10 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
         FILE *F, *OUT;
 
         unsigned long long ct, FCOLL_SHORT_FACTOR, box_ct;
-        double Delta_Max, Delta_Min, Maximum_Mh, PBH_sigmaMmax, Reset_MinM;
-        int R_values_ready;
+
+        // JSC vars
+        double Delta_Max, Delta_Min, Maximum_Mh, PBH_sigmaMmax, Reset_MinM, Boost_Table[Boost_Table_Size], Delta_Step, GridDelta, Boost_User, Boost_ave, Grid_Boost, Grid_Delta;
+        int R_values_ready, idx;
 
         int R_ct, i, ii, j, k, i_z, COMPUTE_Ts, x_e_ct, m_xHII_low, m_xHII_high, n_ct, zpp_gridpoint1_int;
         int zpp_gridpoint2_int, zpp_evolve_gridpoint1_int, zpp_evolve_gridpoint2_int, counter;
@@ -186,7 +188,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
         }
         else
         {
-            // Don't reset if not using radio PBH
+            // Don't reset if not using DM
             Reset_MinM = -10.0;
         }
         // Initialise arrays to be used for the Ts.c computation //
@@ -863,7 +865,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                     }
                     else
                     {
-                        if(Reset_MinM > 0)
+                        if (Reset_MinM > 0)
                         {
                             initialiseSigmaMInterpTable(Reset_MinM, 1e20);
                         }
@@ -1955,7 +1957,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                     // Determine overdensity boundary
                     // This should not be done in omp parallel loop otherwise result could be wrong if using multiple threads
                     // There might also be existing module for overdensity boundary, check again
-                    if (Use_DarkSide)
+                    if (Use_DarkSide && (R_ct == 0))
                     {
                         // Ok let's just do everything here
                         Delta_Min = 0.0;
@@ -1995,6 +1997,49 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                             // Don't know why this would happen
                             Delta_Max = Delta_Min + 0.5;
                         }
+
+                        // Prepare Interpolation Table
+                        Delta_Step = (Delta_Max - Delta_Min) / (((double)Boost_Table_Size) - 1.0);
+                        GridDelta = Delta_Min;
+                        for (idx = 0; idx < Boost_Table_Size; idx++)
+                        {
+                            Boost_Table[idx] = (Reset_MinM, Maximum_Mh, zpp_growth[0], redshift, GridDelta, PBH_sigmaMmax, cosmo_params, -1);
+                            GridDelta += Delta_Step;
+                        }
+                        // Find the Boost for user HMF
+                        Boost_User = (Reset_MinM, Maximum_Mh, zpp_growth[0], redshift, 0.0, PBH_sigmaMmax, cosmo_params, user_params->HMF);
+                        Boost_ave = 0.0;
+                        for (box_ct = 0; box_ct < HII_TOT_NUM_PIXELS; box_ct++)
+                        {
+                            if (user_params->MINIMIZE_MEMORY)
+                            {
+                                Grid_Delta = delNL0[0][box_ct] * zpp_growth[R_ct];
+                            }
+                            else
+                            {
+                                Grid_Delta = delNL0[R_ct][box_ct] * zpp_growth[R_ct];
+                            }
+                            Grid_Boost = Interp_Fast(Boost_Table, Delta_Min, Delta_Max, Boost_Table_Size, Grid_Delta);
+                            Boost_ave += Grid_Boost;
+                            this_spin_temp->Boost_box[box_ct] = Grid_Boost;
+                        }
+                        Boost_ave = Boost_ave / ((double) HII_TOT_NUM_PIXELS);
+
+                        // Normalise the Boost
+                        for (box_ct = 0; box_ct < HII_TOT_NUM_PIXELS; box_ct++)
+                        {
+                           if (Boost_ave < 1E-15)
+                           {
+                            // Technically this shouldn't happen
+                            this_spin_temp->Boost_box[box_ct] = Boost_ave;
+                           }
+                           else
+                           {
+                            this_spin_temp->Boost_box[box_ct] = Boost_User * this_spin_temp->Boost_box[box_ct] / Boost_ave;
+                           }
+
+                        }
+
                     }
 
 #pragma omp parallel shared(delNL0, zpp_growth, SFRD_z_high_table, fcoll_interp_high_min, fcoll_interp_high_bin_width_inv, log10_SFRD_z_low_table,                                                                                                                                     \

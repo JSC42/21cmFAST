@@ -48,8 +48,8 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
     // Throw(InfinityorNaNError);
     Try
     { // This Try{} wraps the whole function.
-            LOG_ERROR("Error_code_49");
-                    Throw(InfinityorNaNError);
+      // LOG_ERROR("Error_code_49");
+      // Throw(InfinityorNaNError);
         LOG_DEBUG("input values:");
         LOG_DEBUG("redshift=%f, prev_redshift=%f perturbed_field_redshift=%f", redshift, prev_redshift, perturbed_field_redshift);
         if (LOG_LEVEL >= DEBUG_LEVEL)
@@ -1812,12 +1812,12 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
 
             LOG_SUPER_DEBUG("looping over box...");
             LOG_ERROR("Error_code_1810");
-                    Throw(InfinityorNaNError);
+            Throw(InfinityorNaNError);
             // Main loop over the entire box for the IGM spin temperature and relevant quantities.
             if (flag_options->USE_MASS_DEPENDENT_ZETA)
             {
-                 LOG_ERROR("Error_code_1814");
-                    Throw(InfinityorNaNError);
+                LOG_ERROR("Error_code_1814");
+                Throw(InfinityorNaNError);
 
 #pragma omp parallel shared(del_fcoll_Rct, dxheat_dt_box, dxion_source_dt_box, dxlya_dt_box, dstarlya_dt_box, previous_spin_temp, \
                             x_int_XHII, m_xHII_low_box, inverse_val_box, inverse_diff, dstarlyLW_dt_box, dstarlyLW_dt_box_MINI,   \

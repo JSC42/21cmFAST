@@ -44,8 +44,8 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                  struct InitialConditions *ini_boxes, struct TsBox *this_spin_temp)
 {
     int status;
-    LOG_ERROR("Error_code_47");
-    Throw(InfinityorNaNError);
+    // LOG_ERROR("Error_code_47");
+    // Throw(InfinityorNaNError);
     Try
     { // This Try{} wraps the whole function.
             LOG_ERROR("Error_code_49");

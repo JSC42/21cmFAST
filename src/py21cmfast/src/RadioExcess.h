@@ -2,7 +2,7 @@
 // Everything is in SI unit unless specified otherwise
 
 #include "Tables.h"
-#include "Hawking_Radiation.h"
+// #include "Hawking_Radiation.h"
 
 // ---- Knobs and Switches ----
 // nu0 is degenerate with fR so no reason to leave this as a param
@@ -383,65 +383,6 @@ void Test_SFRD_box_Interp(struct TsBox *previous_spin_temp, double z1, double z2
 	fclose(OutputFile);
 }
 
-double Get_Radio_Temp_HMG_Astro(struct TsBox *previous_spin_temp, struct AstroParams *astro_params, struct CosmoParams *cosmo_params, struct FlagOptions *flag_options, double zpp_max, double redshift)
-{
-
-	// Find Radio Temp from sources in redshifts [zpp_max, Z_Heat_max]
-	// ---- inputs ----
-	// zpp_max: maximum zpp
-
-	double z1, z2, dz, Phi, Phi_mini, z, fun_ACG, fun_MCG, Radio_Temp, Radio_Prefix_ACG, Radio_Prefix_MCG;
-	int nz, zid;
-
-	nz = 1000;
-	z2 = previous_spin_temp->SFRD_box[5] - 0.01;
-	z1 = zpp_max;
-	dz = (z2 - z1) / (((double)nz) - 1);
-
-	if (flag_options->USE_RADIO_ACG)
-	{
-		Radio_Prefix_ACG = 113.6161 * astro_params->fR * cosmo_params->OMb * (pow(cosmo_params->hlittle, 2)) * (astro_params->F_STAR10) * pow(astro_nu0 / 1.4276, astro_params->aR) * pow(1 + redshift, 3 + astro_params->aR);
-	}
-	else
-	{
-		Radio_Prefix_ACG = 0.0;
-	}
-
-	if (flag_options->USE_RADIO_MCG)
-	{
-		Radio_Prefix_MCG = 113.6161 * astro_params->fR_mini * cosmo_params->OMb * (pow(cosmo_params->hlittle, 2)) * (astro_params->F_STAR7_MINI) * pow(astro_nu0 / 1.4276, astro_params->aR_mini) * pow(1 + redshift, 3 + astro_params->aR_mini);
-	}
-	else
-	{
-		Radio_Prefix_MCG = 0.0;
-	}
-
-	if (z1 > z2)
-	{
-		return 0.0;
-	}
-	else
-	{
-
-		z = z1;
-		Radio_Temp = 0.0;
-
-		for (zid = 1; zid <= nz; zid++)
-		{
-			Phi = SFRD_box_Interp(previous_spin_temp, z, 1);
-			Phi_mini = SFRD_box_Interp(previous_spin_temp, z, 2);
-			fun_ACG = Radio_Prefix_ACG * Phi * pow(1 + z, astro_params->X_RAY_SPEC_INDEX - astro_params->aR) * dz;
-			fun_MCG = Radio_Prefix_MCG * Phi_mini * pow(1 + z, astro_params->X_RAY_SPEC_INDEX - astro_params->aR_mini) * dz;
-			if (z > astro_params->Radio_Zmin)
-			{
-				Radio_Temp += fun_ACG + fun_MCG;
-			}
-			z += dz;
-		}
-		return Radio_Temp;
-	}
-}
-
 double Find_Tk(struct TsBox *previous_spin_temp, double z)
 {
 	// Find Tk at given redshift z
@@ -563,10 +504,9 @@ double Get_Radio_Temp_HMG(struct TsBox *previous_spin_temp, struct AstroParams *
 {
 
 	double Radio_Temp_HMG;
-	Radio_Temp_HMG = Get_Radio_Temp_HMG_Astro(previous_spin_temp, astro_params, cosmo_params, flag_options, zpp_max, redshift);
 	if (flag_options->USE_RADIO_PBH)
 	{
-		Radio_Temp_HMG += Get_Radio_Temp_HMG_PBH(previous_spin_temp, redshift, zpp_max, cosmo_params, astro_params, user_params->HMF);
+		Radio_Temp_HMG = Get_Radio_Temp_HMG_PBH(previous_spin_temp, redshift, zpp_max, cosmo_params, astro_params, user_params->HMF);
 	}
 	if (Radio_Temp_HMG < -1.0E-8)
 	{
@@ -589,18 +529,10 @@ void Refine_T_Radio(struct TsBox *previous_spin_temp, struct TsBox *this_spin_te
 	*/
 	int box_ct;
 	float T_prev, T_now, Conversion_Factor;
-	if (flag_options->USE_RADIO_PBH || flag_options->USE_RADIO_MCG)
-	{
-		if (redshift < astro_params->Radio_Zmin)
-		{
-			LOG_ERROR("Current module only supports Radio ACG\n");
-			Throw(ValueError);
-		}
-	}
+	
+	Conversion_Factor = pow((1 + redshift) / (1 + prev_redshift), 3 + astro_params->bh_aR);
 
-	Conversion_Factor = pow((1 + redshift) / (1 + prev_redshift), 3 + astro_params->aR);
-
-	if (redshift < astro_params->Radio_Zmin)
+	if ((redshift < astro_params->Radio_Zmin) && (flag_options->USE_RADIO_PBH))
 	{
 		for (box_ct = 0; box_ct < HII_TOT_NUM_PIXELS; box_ct++)
 		{

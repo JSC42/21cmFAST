@@ -57,21 +57,17 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
 
         // All these are variables for PBH&Radio Background
         double Radio_Temp, Radio_Temp_HMG, Radio_Fun, Trad_inv, zpp_max, z1, z2, Phi, Radio_zpp, new_nu, Phi_mini, Phi_ave, Phi_ave_mini, T_IGM_ave, PBH_Fcoll_Table[PBH_Table_Size], PBH_FidEMS_Table[PBH_Table_Size];
-        double Hawking_dEdVdt_HIon, Hawking_dEdVdt_LyA, Hawking_dEdVdt_Heat, nH_ave, PeeblesFactor, Hawking_dxedt, Hawking_dTdt, Hawking_dxedz, Hawking_dTdz, Tk1, Tk2, Radio_EMS_IGM, dzpp_Rct0;
+        double Radio_EMS_IGM, dzpp_Rct0;
         double Delta_Min, Delta_Max, Maximum_Mh, PBH_sigmaMmax, Delta_Width, Grid_Delta, Mininum_Mh, Grid_Fcoll, Grid_Fid_EMS, PBH_Radio_EMS_Halo, nu_factor, HubbleFactor, Halo_Boost_ave, dxedz_dm, dtdz_dm;
-        double Radio_dzpp, PBH_Fcoll_ave, PBH_FidEMS_ave, PBH_Fcoll_User, PBH_EMS_User, Radio_Prefix_ACG, Radio_Prefix_MCG, mbh_kg, mbh_gram, Reset_MinM, Fill_Fraction, Radio_Temp_ave, Halo_Boost_User;
+        double Radio_dzpp, PBH_Fcoll_ave, PBH_FidEMS_ave, PBH_Fcoll_User, PBH_EMS_User, Reset_MinM, Fill_Fraction, Radio_Temp_ave, Halo_Boost_User;
         int idx, ArchiveSize, zid, fid, tid, sid, xid, zpp_idx, Radio_Silent, R_values_ready;
         FILE *OutputFile;
         double Rct_Tk_Table[10000], Halo_Boost_Tab[PBH_Table_Size]; // Gas temp for all Rct steps, only the first NUM_FILTER_STEPS_FOR_Ts elements are used
 
         // Initialising some variables
-        mbh_gram = astro_params->mbh * Msun;
-        mbh_kg = mbh_gram / 1000.0;
         T_IGM_ave = 0.0;
         R_values_ready = 0;
         Radio_Temp_ave = 0.0;
-        Radio_Prefix_ACG = 113.6161 * astro_params->fR * cosmo_params->OMb * (pow(cosmo_params->hlittle, 2)) * (astro_params->F_STAR10) * pow(astro_nu0 / 1.4276, astro_params->aR) * pow(1 + redshift, 3 + astro_params->aR);
-        Radio_Prefix_MCG = 113.6161 * astro_params->fR_mini * cosmo_params->OMb * (pow(cosmo_params->hlittle, 2)) * (astro_params->F_STAR7_MINI) * pow(astro_nu0 / 1.4276, astro_params->aR_mini) * pow(1 + redshift, 3 + astro_params->aR_mini);
 
         // Makes the parameter structs visible to a variety of functions/macros
         // Do each time to avoid Python garbage collection issues
@@ -205,7 +201,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
         }
 
         // Determine whether to use radio excess
-        if (flag_options->USE_RADIO_PBH || (flag_options->USE_RADIO_ACG || flag_options->USE_RADIO_MCG))
+        if (flag_options->USE_RADIO_PBH)
         {
             Radio_Silent = 0;
         }
@@ -235,23 +231,6 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
         {
             ION_EFF_FACTOR = astro_params->HII_EFF_FACTOR;
             ION_EFF_FACTOR_MINI = 0.;
-        }
-
-        if (flag_options->USE_HAWKING_RADIATION)
-        {
-            // Some global vars needed for PBH heating/ionization module (see 2108.13256)
-            // nH_ave: averaged number density for H nuclei, in m^-3, assuming Y=0.245. Time this by (1 + delta) to get nH on grid
-            nH_ave = 8.4816 * cosmo_params->OMb * (pow(cosmo_params->hlittle, 2)) * pow(1 + redshift, 3);
-            Hawking_dEdVdt_HIon = dEdVdt_PBH_dep(redshift, astro_params, cosmo_params, 1);
-            Hawking_dEdVdt_LyA = dEdVdt_PBH_dep(redshift, astro_params, cosmo_params, 3);
-            Hawking_dEdVdt_Heat = dEdVdt_PBH_dep(redshift, astro_params, cosmo_params, 4);
-        }
-        else
-        {
-            nH_ave = 8.4816 * cosmo_params->OMb * (pow(cosmo_params->hlittle, 2)) * pow(1 + redshift, 3);
-            Hawking_dEdVdt_HIon = 0.0;
-            Hawking_dEdVdt_LyA = 0.0;
-            Hawking_dEdVdt_Heat = 0.0;
         }
 
         // Initialise arrays to be used for the Ts.c computation //
@@ -680,13 +659,6 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                     Tk_BC = global_params.TK_at_Z_HEAT_MAX;
                 else
                     Tk_BC = T_RECFAST(global_params.Z_HEAT_MAX, 0);
-
-                if (flag_options->USE_HAWKING_RADIATION)
-                {
-                    // Must set initial condition, do it right in later versions
-                    xe_BC = xe_BC + Set_ICs_z35(mbh_gram, astro_params->fbh, 0);
-                    Tk_BC = Tk_BC + Set_ICs_z35(mbh_gram, astro_params->fbh, 1);
-                }
 
                 // and initialize to the boundary values at Z_HEAT_END
 #pragma omp parallel shared(previous_spin_temp, Tk_BC, xe_BC) private(ct) num_threads(user_params->N_THREADS)
@@ -2536,22 +2508,6 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                                     // Radio_Fun: sum this up to get T_Radio
                                     Radio_Fun = 0.0;
 
-                                    // Radio Galaxy models
-                                    if (flag_options->USE_RADIO_ACG) // Pop II
-                                    {
-                                        LOG_ERROR("This is the Dark_Side branch, radio MCG or ACG should be removed to avoid confusion with Radio_Excess branch!");
-                                        Throw(InfinityorNaNError);
-                                        Radio_Fun += Radio_Prefix_ACG * dfcoll_dz_val * (double)del_fcoll_Rct[box_ct] * (pow(1 + zpp_for_evolve_list[R_ct], astro_params->X_RAY_SPEC_INDEX - astro_params->aR));
-                                    }
-
-                                    if (flag_options->USE_RADIO_MCG) // Pop III
-                                    {
-                                        LOG_ERROR("This is the Dark_Side branch, radio MCG or ACG should be removed to avoid confusion with Radio_Excess branch!");
-                                        Throw(InfinityorNaNError);
-
-                                        Radio_Fun += Radio_Prefix_MCG * dfcoll_dz_val_MINI * (double)del_fcoll_Rct_MINI[box_ct] * (pow(1 + zpp_for_evolve_list[R_ct], astro_params->X_RAY_SPEC_INDEX - astro_params->aR_mini));
-                                    }
-
                                     if (flag_options->USE_RADIO_PBH) // Accreting PBH
                                     {
                                         if (R_ct < global_params.NUM_FILTER_STEPS_FOR_Ts - 1)
@@ -2642,14 +2598,6 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                                 dxedz_dm = DM_Term(zpp_for_evolve_list[0], this_spin_temp->Boost_box[box_ct], Grid_Delta, astro_params, flag_options, x_e, dt_dzp, 1);
                                 dtdz_dm = DM_Term(zpp_for_evolve_list[0], this_spin_temp->Boost_box[box_ct], Grid_Delta, astro_params, flag_options, x_e, dt_dzp, 4);
 
-                                // Add PBH heating/ionisation terms
-                                // Overdensities in nH and dEdVdt cancels one another, so just use the AVG nH
-                                PeeblesFactor = 0.9; // Do this right later
-                                Hawking_dxedt = Hawking_dEdVdt_HIon / nH_ave / (13.6 * 1.602E-19) + (1 - PeeblesFactor) * Hawking_dEdVdt_LyA / nH_ave / (10.2 * 1.602E-19);
-                                Hawking_dTdt = 2 * Hawking_dEdVdt_Heat / (1.08 + x_e) / (3 * nH_ave * 1.380649E-23);
-                                Hawking_dxedz = Hawking_dxedt * dt_dzp;
-                                Hawking_dTdz = Hawking_dTdt * dt_dzp;
-
                                 // add prefactors
                                 dxheat_dt_box[box_ct] *= const_zp_prefactor;
                                 dxion_source_dt_box[box_ct] *= const_zp_prefactor;
@@ -2707,7 +2655,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                                 }
 
                                 // update quantities
-                                x_e += (dxe_dzp + Hawking_dxedz + dxedz_dm) * dzp; // remember dzp is negative
+                                x_e += (dxe_dzp + dxedz_dm) * dzp; // remember dzp is negative
                                 if (x_e > 1)                                       // can do this late in evolution if dzp is too large
                                     x_e = 1 - FRACT_FLOAT_ERR;
                                 else if (x_e < 0)
@@ -2716,11 +2664,11 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                                 {
                                     if (flag_options->USE_MINI_HALOS)
                                     {
-                                        T += (dxheat_dzp + dxheat_dzp_MINI + dcomp_dzp + dspec_dzp + dadia_dzp + Hawking_dTdz + dtdz_dm) * dzp;
+                                        T += (dxheat_dzp + dxheat_dzp_MINI + dcomp_dzp + dspec_dzp + dadia_dzp + dtdz_dm) * dzp;
                                     }
                                     else
                                     {
-                                        T += (dxheat_dzp + dcomp_dzp + dspec_dzp + dadia_dzp + Hawking_dTdz + dtdz_dm) * dzp;
+                                        T += (dxheat_dzp + dcomp_dzp + dspec_dzp + dadia_dzp + dtdz_dm) * dzp;
                                     }
                                 }
 
@@ -2898,17 +2846,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
 
                                 // What is dfcoll_dz_val: (1+z')^{-\alpha} dz' (1+\delta_{nl}) * df_{coll}/dz'
                                 // Or as in my note.pdf: dfcoll_dz_val = Phi*dzpp
-
-                                if ((zpp_for_evolve_list[R_ct] > astro_params->Radio_Zmin) && (Radio_Silent == 0))
-                                {
-                                    Radio_Fun = Radio_Prefix_ACG * dfcoll_dz_val * pow(1 + zpp_for_evolve_list[R_ct], astro_params->X_RAY_SPEC_INDEX - astro_params->aR);
-                                }
-                                else
-                                {
-                                    Radio_Fun = 0.0;
-                                }
-                                Radio_Temp += Radio_Fun;
-
+                                
                                 dxheat_dt += dfcoll_dz_val *
                                              ((freq_int_heat_tbl_diff[m_xHII_low][R_ct]) * inverse_val + freq_int_heat_tbl[m_xHII_low][R_ct]);
                                 dxion_source_dt += dfcoll_dz_val *
@@ -2918,13 +2856,6 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                                             ((freq_int_lya_tbl_diff[m_xHII_low][R_ct]) * inverse_val + freq_int_lya_tbl[m_xHII_low][R_ct]);
                                 dstarlya_dt += dfcoll_dz_val * dstarlya_dt_prefactor[R_ct];
                             }
-
-                            // Add PBH heating/ionisation module
-                            PeeblesFactor = 0.9; // Do this right later
-                            Hawking_dxedt = Hawking_dEdVdt_HIon / nH_ave / (13.6 * 1.602E-19) + (1 - PeeblesFactor) * Hawking_dEdVdt_LyA / nH_ave / (10.2 * 1.602E-19);
-                            Hawking_dTdt = 2 * Hawking_dEdVdt_Heat / (1.08 + x_e) / (3 * nH_ave * 1.380649E-23);
-                            Hawking_dxedz = Hawking_dxedt * dt_dzp;
-                            Hawking_dTdz = Hawking_dTdt * dt_dzp;
                         }
 
                         // add prefactors
@@ -2959,14 +2890,14 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                         dxheat_dzp = dxheat_dt * dt_dzp * 2.0 / 3.0 / k_B / (1.0 + x_e);
                         // update quantities
 
-                        x_e += (dxe_dzp + Hawking_dxedz) * dzp; // remember dzp is negative
+                        x_e += dxe_dzp * dzp; 
                         if (x_e > 1)                            // can do this late in evolution if dzp is too large
                             x_e = 1 - FRACT_FLOAT_ERR;
                         else if (x_e < 0)
                             x_e = 0;
                         if (T < MAX_TK)
                         {
-                            T += (dxheat_dzp + dcomp_dzp + dspec_dzp + dadia_dzp + Hawking_dTdz) * dzp;
+                            T += (dxheat_dzp + dcomp_dzp + dspec_dzp + dadia_dzp) * dzp;
                         }
 
                         if (T < 0)

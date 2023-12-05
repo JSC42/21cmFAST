@@ -67,10 +67,6 @@ struct AstroParams
 
     // Parameters for Radio Background and PBH
     // Added by Junsong Cang
-    float fR; // Radio efficiency
-    float aR; // Radio SED power index
-    float fR_mini; // Radio efficiency for mini halo
-    float aR_mini; // Radio SED power index for minihalo
     float mbh; // PBH mass in msun
     float fbh; // PBH fraction,i.e. rho_bh/rho_dm
     float bh_aR; // PBH radio SED power index
@@ -78,7 +74,6 @@ struct AstroParams
     float bh_fR; // PBH radio efficiency
     float bh_lambda; // PBH accretion efficiency
     float bh_Eta; // PBH emission efficiency, this is degenerate with lambda so might as well remove this
-    float bh_spin; // Reduced initial Kerr spin for PBHs, in range [0,1), see 2108.13256
     float Radio_Zmin; // Kill radio emmisivity below this redshift, a phenomenological param motivated by ARCADE2 upper limit
     float Pann27; // <sv>/m for annihilating DM, in 10^-27cm^3/s/GeV
 
@@ -86,7 +81,6 @@ struct AstroParams
 
 struct FlagOptions
 {
-
     // Parameters taken from INIT_PARAMS.H
     bool USE_HALO_FIELD;
     bool USE_MINI_HALOS;
@@ -98,10 +92,7 @@ struct FlagOptions
     bool PHOTON_CONS;
     bool FIX_VCB_AVG;
     // Settings for Radio Excess and Hawking Radiation
-    bool USE_RADIO_ACG;
-    bool USE_RADIO_MCG;
     bool USE_RADIO_PBH;
-    bool USE_HAWKING_RADIATION;
     bool USE_HALO_BOOST;
     bool INHOMO_HALO_BOOST;
 };

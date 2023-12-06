@@ -56,19 +56,16 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
         }
 
         // All these are variables for PBH&Radio Background
-        double Radio_Temp, Radio_Temp_HMG, Radio_Fun, Trad_inv, zpp_max, z1, z2, Phi, Radio_zpp, new_nu, Phi_mini, Phi_ave, Phi_ave_mini, T_IGM_ave, PBH_Fcoll_Table[PBH_Table_Size], PBH_FidEMS_Table[PBH_Table_Size];
-        double Radio_EMS_IGM, dzpp_Rct0;
-        double Delta_Min, Delta_Max, Maximum_Mh, PBH_sigmaMmax, Delta_Width, Grid_Delta, Mininum_Mh, Grid_Fcoll, Grid_Fid_EMS, PBH_Radio_EMS_Halo, nu_factor, HubbleFactor, Halo_Boost_ave, dxedz_dm, dtdz_dm;
-        double Radio_dzpp, PBH_Fcoll_ave, PBH_FidEMS_ave, PBH_Fcoll_User, PBH_EMS_User, Reset_MinM, Fill_Fraction, Radio_Temp_ave, Halo_Boost_User;
-        int idx, ArchiveSize, zid, fid, tid, sid, xid, zpp_idx, Radio_Silent, R_values_ready;
-        FILE *OutputFile;
-        double Rct_Tk_Table[10000], Halo_Boost_Tab[PBH_Table_Size]; // Gas temp for all Rct steps, only the first NUM_FILTER_STEPS_FOR_Ts elements are used
+        double Trad_inv, Halo_Boost_Tab[PBH_Table_Size];
+        double Delta_Min, Delta_Max, Maximum_Mh, PBH_sigmaMmax, Delta_Width, Grid_Delta, Mininum_Mh, HubbleFactor, Halo_Boost_ave, dxedz_dm, dtdz_dm;
+        double Reset_MinM, Halo_Boost_User;
+        int idx, R_values_ready;
 
+        // double PBH_Fcoll_Table[PBH_Table_Size];
+        
         // Initialising some variables
-        T_IGM_ave = 0.0;
         R_values_ready = 0;
-        Radio_Temp_ave = 0.0;
-
+        
         // Makes the parameter structs visible to a variety of functions/macros
         // Do each time to avoid Python garbage collection issues
         Broadcast_struct_global_PS(user_params, cosmo_params);
@@ -169,52 +166,19 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
             table_int_boundexceeded_threaded[i] = 0;
         }
 
-        // ---------------- Pre-flight checks ----------------
-        // Most of these need to be done in python in next version
-        // Make sure SFRD_Box is large enough
-        // USE_RADIO_PBH requires NUM_FILTER_STEPS_FOR_Ts = 40, to be improved in next version
-
-        if (flag_options->USE_HALO_BOOST && !(flag_options->USE_RADIO_PBH))
+        // Reset HMF interpolation table mass range for DM Halo Boost, use 1e-6
+        if (flag_options->USE_HALO_BOOST)
         {
-            LOG_ERROR("You must turn on Radio_PBH when running with Halo_Boost");
-            Throw(ValueError);
-        }
-        if (flag_options->USE_RADIO_PBH)
-        {
-            // Reset HMF interpolation table mass range for radio PBH, 100 is usually enough
-            Reset_MinM = 100.0;
-            if (flag_options->USE_HALO_BOOST)
+            if (user_params->N_THREADS > 1)
             {
-                Reset_MinM = 1.0e-6;
-            }
-            if (global_params.NUM_FILTER_STEPS_FOR_Ts > 10000)
-            {
-                // Probably no one will set such high NUM_FILTER_STEPS_FOR_Ts but just in case someone does
-                LOG_ERROR(" Rct_Tk_Table not large enough, reduce NUM_FILTER_STEPS_FOR_Ts to below 10000!");
+                LOG_ERROR("Current HALO_BOOST module does not support mpi\n");
                 Throw(ValueError);
             }
+            Reset_MinM = 1.0e-6;
         }
         else
         {
-            // Don't reset if not using radio PBH
             Reset_MinM = -10.0;
-        }
-
-        // Determine whether to use radio excess
-        if (flag_options->USE_RADIO_PBH)
-        {
-            Radio_Silent = 0;
-        }
-        else
-        {
-            Radio_Silent = 1;
-        }
-
-        Fill_Fraction = (double)previous_spin_temp->SFRD_box[0] * 5 / ((double)HII_TOT_NUM_PIXELS);
-        if (Fill_Fraction > 0.8)
-        {
-            LOG_ERROR("SFRD_Box not large enough to record previous coevals, consider the following: increse HII_DIM, reduce z_prime_factor");
-            Throw(ValueError);
         }
 
         double total_time, total_time2, total_time3, total_time4;
@@ -599,8 +563,6 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                             this_spin_temp->Ts_box[HII_R_INDEX(i, j, k)] = get_Ts(redshift,
                                                                                   perturbed_field->density[HII_R_INDEX(i, j, k)] * inverse_growth_factor_z * growth_factor_zp,
                                                                                   TK, xe, 0, &curr_xalpha);
-                            this_spin_temp->Trad_box[HII_R_INDEX(i, j, k)] = 0.0;  // Initialize to 0
-                            this_spin_temp->SFRD_box[HII_R_INDEX(i, j, k)] = 0.0;  // Initialize to 0
                             this_spin_temp->Boost_box[HII_R_INDEX(i, j, k)] = 1.0; // Initialize to 1
                         }
                     }
@@ -660,7 +622,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                 else
                     Tk_BC = T_RECFAST(global_params.Z_HEAT_MAX, 0);
 
-                // and initialize to the boundary values at Z_HEAT_END
+                    // and initialize to the boundary values at Z_HEAT_END
 #pragma omp parallel shared(previous_spin_temp, Tk_BC, xe_BC) private(ct) num_threads(user_params->N_THREADS)
                 {
 #pragma omp for
@@ -1299,7 +1261,6 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                 if (R_ct == 0)
                 {
                     dzpp_for_evolve = zp - zpp_edge[0];
-                    dzpp_Rct0 = fabs(dzpp_for_evolve);
                 }
                 else
                 {
@@ -1373,16 +1334,6 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                             }
                         }
                         log10_Mcrit_LW_ave /= (double)HII_TOT_NUM_PIXELS;
-
-                        if (Debug_Printer == 1)
-                        {
-                            if (R_ct == 0)
-                            {
-                                OutputFile = fopen("Mturn_Table_sp_tmp.txt", "a");
-                                fprintf(OutputFile, "%f    %E\n", zpp_for_evolve_list[0], log10_Mcrit_LW_ave);
-                                fclose(OutputFile);
-                            }
-                        }
 
                         log10_Mcrit_LW_ave_list[R_ct] = log10_Mcrit_LW_ave;
 
@@ -1860,38 +1811,6 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
 
             LOG_SUPER_DEBUG("looping over box...");
 
-            zpp_max = zpp_for_evolve_list[global_params.NUM_FILTER_STEPS_FOR_Ts - 1];
-            ArchiveSize = (int)round(previous_spin_temp->SFRD_box[0]);
-
-            // Prepare global Tk array for R_ct loop
-            if (flag_options->USE_RADIO_PBH)
-            {
-                for (R_ct = 0; R_ct < global_params.NUM_FILTER_STEPS_FOR_Ts; R_ct++)
-                {
-                    Radio_zpp = zpp_for_evolve_list[R_ct];
-                    Rct_Tk_Table[R_ct] = SFRD_box_Interp(previous_spin_temp, Radio_zpp, 3);
-
-                    if (Rct_Tk_Table[R_ct] < -1.0E-5)
-                    {
-                        // Found no record in SFRD_box?
-                        // A: zpp higher than zheat_max - use LCDM
-                        // B: zpp is between prev_z and this_z - use prev Tk
-                        if (Radio_zpp > 0.8 * global_params.Z_HEAT_MAX)
-                        {
-                            Rct_Tk_Table[R_ct] = LCDM_Tk(Radio_zpp);
-                        }
-                        else
-                        {
-                            tid = (ArchiveSize - 1) * 5 + 3;
-                            Rct_Tk_Table[R_ct] = previous_spin_temp->SFRD_box[tid];
-                        }
-                    }
-                }
-            }
-
-            // Correcting for the radio temp from sources > R_XLy_MAX
-            Radio_Temp_HMG = Get_Radio_Temp_HMG(previous_spin_temp, astro_params, cosmo_params, flag_options, user_params, zpp_max, redshift);
-
             // Main loop over the entire box for the IGM spin temperature and relevant quantities.
             if (flag_options->USE_MASS_DEPENDENT_ZETA)
             {
@@ -1907,7 +1826,6 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                         del_fcoll_Rct[box_ct] = 0.;
 
                         dxheat_dt_box[box_ct] = 0.;
-                        this_spin_temp->Trad_box[box_ct] = Radio_Temp_HMG; // Initialize to HMG before R_ct loop
                         this_spin_temp->Boost_box[box_ct] = 1.0;           // I don't think this is required
                         dxion_source_dt_box[box_ct] = 0.;
                         dxlya_dt_box[box_ct] = 0.;
@@ -1949,12 +1867,9 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                     // Initializing interpolation boundary for overdensity
                     Delta_Min = 0.0;
                     Delta_Max = 0.0;
-                    // Some numbers for Radio_PBH_Fid_EMS_Halo function
                     if (flag_options->USE_RADIO_PBH)
                     {
-                        // Radio_PBH_Fid_EMS_Halo integration upper limit
                         Maximum_Mh = RtoM(R_values[R_ct]);
-                        // Maximum sigma for Conditional_HMF function in Radio_PBH_Fid_EMS_Halo
                         PBH_sigmaMmax = sigma_z0(Maximum_Mh);
                     }
 
@@ -2306,13 +2221,11 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                         dstarlyLW_dt_prefactor_MINI[R_ct] *= dfcoll_dz_val_MINI;
                     }
 
-                    // Preparing EMS and Fcoll interpolation tables (PBH_FidEMS_Table and PBH_Fcoll_Table)for Radio PBH
                     if (flag_options->USE_RADIO_PBH)
                     {
 
                         // Minimum halo mass in the integration, in Msun
-                        Mininum_Mh = 1.3E3 * pow(Rct_Tk_Table[R_ct], 1.5) * pow((1 + zpp_for_evolve_list[R_ct]) / 10, -1.5);
-
+                        
                         if (Delta_Min < -1.0)
                         {
                             Delta_Min = -0.99;
@@ -2326,17 +2239,13 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
 
                         if (R_values_ready == 0)
                         {
-                            // If for some reason Maximum_Mh not assigned
-                            Maximum_Mh = 0.99E20; // Typical value for HMF interpolaiton range
-                            PBH_sigmaMmax = sigma_z0(Maximum_Mh);
+                            LOG_ERROR("R_values_ready is false, check what happened\n");
+                            Throw(ValueError);
                         }
 
                         Delta_Width = (Delta_Max - Delta_Min) / ((double)PBH_Table_Size - 1);
                         Grid_Delta = Delta_Min;
 
-                        // EMS and Fcoll for HMF chosen by user, needed for normalisation
-                        PBH_EMS_User = Radio_PBH_Fid_EMS_Halo(Mininum_Mh, Maximum_Mh, zpp_growth[R_ct], zpp_for_evolve_list[R_ct], 0.0, PBH_sigmaMmax, cosmo_params, user_params->HMF);
-                        PBH_Fcoll_User = FgtrM_General(zpp_for_evolve_list[R_ct], Mininum_Mh);
                         if (R_ct == 0)
                         {
                             if (flag_options->USE_HALO_BOOST)
@@ -2352,8 +2261,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                         // Fill the interpolation array
                         for (idx = 0; idx < PBH_Table_Size; idx++)
                         {
-                            PBH_FidEMS_Table[idx] = Radio_PBH_Fid_EMS_Halo(Mininum_Mh, Maximum_Mh, zpp_growth[R_ct], zpp_for_evolve_list[R_ct], Grid_Delta, PBH_sigmaMmax, cosmo_params, -1);
-                            PBH_Fcoll_Table[idx] = Nion_ConditionalM(zpp_growth[R_ct], log(Mininum_Mh), log(Maximum_Mh), PBH_sigmaMmax, Deltac, Grid_Delta, 0.0, 0.0, 0.0, 1., 1., Mlim_Fstar, 0., user_params->FAST_FCOLL_TABLES);
+                            // PBH_Fcoll_Table[idx] = Nion_ConditionalM(zpp_growth[R_ct], log(Mininum_Mh), log(Maximum_Mh), PBH_sigmaMmax, Deltac, Grid_Delta, 0.0, 0.0, 0.0, 1., 1., Mlim_Fstar, 0., user_params->FAST_FCOLL_TABLES);
 
                             // Also fill Boost_Tab for R_ct 0
                             if (R_ct == 0)
@@ -2378,15 +2286,6 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                             Grid_Delta += Delta_Width;
                         }
 
-                        if ((Debug_Printer == 1) && (R_ct == 0))
-                        {
-                            Print_HMF(zpp_for_evolve_list[R_ct], zpp_growth[R_ct], user_params->HMF);
-                        }
-
-                        // Normalising the interpolation table so that the averaged Fcoll and EMS match the HMF model selected by the user
-                        // Don't worry too much about interpolaiton speed, Interp_Fast speed is about 10^8 calls per second
-                        PBH_FidEMS_ave = 0.0;
-                        PBH_Fcoll_ave = 0.0;
                         Halo_Boost_ave = 0.0;
                         for (box_ct = 0; box_ct < HII_TOT_NUM_PIXELS; box_ct++)
                         {
@@ -2398,77 +2297,23 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                             {
                                 Grid_Delta = delNL0[R_ct][box_ct] * zpp_growth[R_ct];
                             }
-                            PBH_FidEMS_ave += Interp_Fast(PBH_FidEMS_Table, Delta_Min, Delta_Max, PBH_Table_Size, Grid_Delta);
-                            PBH_Fcoll_ave += Interp_Fast(PBH_Fcoll_Table, Delta_Min, Delta_Max, PBH_Table_Size, Grid_Delta);
 
                             if ((R_ct == 0) && flag_options->USE_HALO_BOOST)
                             {
                                 Halo_Boost_ave += Interp_Fast(Halo_Boost_Tab, Delta_Min, Delta_Max, PBH_Table_Size, Grid_Delta);
                             }
                         }
-                        PBH_FidEMS_ave = PBH_FidEMS_ave / ((double)HII_TOT_NUM_PIXELS);
-                        PBH_Fcoll_ave = PBH_Fcoll_ave / ((double)HII_TOT_NUM_PIXELS);
                         if ((R_ct == 0) && flag_options->USE_HALO_BOOST)
                         {
                             Halo_Boost_ave = Halo_Boost_ave / ((double)HII_TOT_NUM_PIXELS);
                         }
-
-                        if ((isfinite(PBH_EMS_User) == 0) || (isfinite(PBH_Fcoll_User) == 0))
+                        for (idx = 0; idx < PBH_Table_Size; idx++)
                         {
-                            LOG_ULTRA_DEBUG("EMS or Fcoll is NaN");
-                            Throw(InfinityorNaNError);
-                        }
-                        else
-                        {
-                            for (idx = 0; idx < PBH_Table_Size; idx++)
+                            if ((R_ct == 0) && flag_options->USE_HALO_BOOST)
                             {
-
-                                // Avoid NaN error for small EMS
-                                if (fabs(PBH_FidEMS_ave) < 1.0E-150)
-                                {
-                                    PBH_FidEMS_Table[idx] = 0.0;
-                                }
-                                else
-                                {
-                                    PBH_FidEMS_Table[idx] = (PBH_EMS_User / PBH_FidEMS_ave) * PBH_FidEMS_Table[idx];
-                                    if (isfinite(PBH_FidEMS_Table[idx]) == 0)
-                                    {
-                                        LOG_ERROR("I have a bad feeling about this, EMS is NaN.");
-                                        Throw(InfinityorNaNError);
-                                    }
-                                }
-                                // Avoid NaN error for small Fcoll
-                                if (fabs(PBH_Fcoll_ave) < 1.0E-150)
-                                {
-                                    PBH_Fcoll_Table[idx] = 0.0;
-                                }
-                                else
-                                {
-                                    PBH_Fcoll_Table[idx] = fmin(1.0, (PBH_Fcoll_User / PBH_Fcoll_ave) * PBH_Fcoll_Table[idx]);
-                                    if (isfinite(PBH_Fcoll_Table[idx]) == 0)
-                                    {
-                                        LOG_ERROR("I have a bad feeling about this, Fcoll is NaN.");
-                                        Throw(InfinityorNaNError);
-                                    }
-                                }
-                                // Check negative Fcoll and EMS, allow for some redundencies just in case it's due to numerical precision
-                                if (PBH_Fcoll_Table[idx] < -1.0E-6)
-                                {
-                                    LOG_ERROR("Negative fcoll detected, fcoll = %E", PBH_Fcoll_Table[idx]);
-                                    Throw(ValueError);
-                                }
-                                if (PBH_FidEMS_Table[idx] < -1.0E-6)
-                                {
-                                    LOG_ERROR("Negative EMS detected, fcoll = %E", PBH_FidEMS_Table[idx]);
-                                    Throw(ValueError);
-                                }
-                                if ((R_ct == 0) && flag_options->USE_HALO_BOOST)
-                                {
-                                    Halo_Boost_Tab[idx] = Halo_Boost_User * Halo_Boost_Tab[idx] / Halo_Boost_ave;
-                                }
+                                Halo_Boost_Tab[idx] = Halo_Boost_User * Halo_Boost_Tab[idx] / Halo_Boost_ave;
                             }
                         }
-                        // Ok you are now good to go
                     }
 
 #pragma omp parallel shared(dxheat_dt_box, dxion_source_dt_box, dxlya_dt_box, dstarlya_dt_box, dfcoll_dz_val, del_fcoll_Rct, freq_int_heat_tbl_diff,                                                                                                                      \
@@ -2502,44 +2347,6 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                             {
                                 dxheat_dt_box[box_ct] += (dfcoll_dz_val * (double)del_fcoll_Rct[box_ct] * ((freq_int_heat_tbl_diff[m_xHII_low_box[box_ct]][R_ct]) * inverse_val_box[box_ct] + freq_int_heat_tbl[m_xHII_low_box[box_ct]][R_ct]));
 
-                                // Note: dfcoll_dz_val * (double)del_fcoll_Rct[box_ct] = Phi * dzp
-                                if ((zpp_for_evolve_list[R_ct] > astro_params->Radio_Zmin) && (Radio_Silent == 0))
-                                {
-                                    // Radio_Fun: sum this up to get T_Radio
-                                    Radio_Fun = 0.0;
-
-                                    if (flag_options->USE_RADIO_PBH) // Accreting PBH
-                                    {
-                                        if (R_ct < global_params.NUM_FILTER_STEPS_FOR_Ts - 1)
-                                        {
-                                            Radio_dzpp = zpp_for_evolve_list[R_ct + 1] - zpp_for_evolve_list[R_ct];
-                                        }
-                                        else
-                                        {
-                                            Radio_dzpp = 0.0;
-                                        }
-
-                                        // Frequency scaling factor
-                                        nu_factor = pow((1 + zpp_for_evolve_list[R_ct]) / (1 + redshift), -astro_params->bh_aR);
-                                        // I want the EMS at this frequency
-                                        new_nu = 1.43E9 * (1 + zpp_for_evolve_list[R_ct]) / (1 + redshift);
-                                        // Fcoll
-                                        Grid_Fcoll = Interp_Fast(PBH_Fcoll_Table, Delta_Min, Delta_Max, PBH_Table_Size, Grid_Delta);
-
-                                        // Comoving radio emissivity for our fiducial model params
-                                        Grid_Fid_EMS = Interp_Fast(PBH_FidEMS_Table, Delta_Min, Delta_Max, PBH_Table_Size, Grid_Delta);
-                                        PBH_Radio_EMS_Halo = astro_params->bh_fR * nu_factor * Grid_Fid_EMS * astro_params->fbh * pow(astro_params->mbh / 10, 0.82) * pow(astro_params->bh_fX * astro_params->bh_Eta * astro_params->bh_lambda / 1E-4, 0.85);
-                                        Radio_EMS_IGM = PBH_Radio_EMS_IGM(zpp_for_evolve_list[R_ct], new_nu, cosmo_params, astro_params, Rct_Tk_Table[R_ct], Grid_Fcoll, Grid_Delta);
-                                        // 3.8509E28 is c^3/(8 pi kB nu21^2) in SI unit
-                                        Radio_Fun += fabs(Radio_dzpp * (PBH_Radio_EMS_Halo + Radio_EMS_IGM) * pow(1 + redshift, 3.0) * 3.8509E28 / (HubbleFactor * (1 + zpp_for_evolve_list[R_ct])));
-                                    }
-                                }
-                                else
-                                {
-                                    Radio_Fun = 0.0;
-                                }
-                                this_spin_temp->Trad_box[box_ct] += Radio_Fun;
-
                                 dxion_source_dt_box[box_ct] += (dfcoll_dz_val * (double)del_fcoll_Rct[box_ct] * ((freq_int_ion_tbl_diff[m_xHII_low_box[box_ct]][R_ct]) * inverse_val_box[box_ct] + freq_int_ion_tbl[m_xHII_low_box[box_ct]][R_ct]));
 
                                 dxlya_dt_box[box_ct] += (dfcoll_dz_val * (double)del_fcoll_Rct[box_ct] * ((freq_int_lya_tbl_diff[m_xHII_low_box[box_ct]][R_ct]) * inverse_val_box[box_ct] + freq_int_lya_tbl[m_xHII_low_box[box_ct]][R_ct]));
@@ -2554,8 +2361,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                             {
                                 dxheat_dt_box[box_ct] += 0.;
                                 dxion_source_dt_box[box_ct] += 0.;
-                                this_spin_temp->Trad_box[box_ct] += 0.;
-
+                                
                                 dxlya_dt_box[box_ct] += 0.;
                                 dstarlya_dt_box[box_ct] += 0.;
 
@@ -2580,9 +2386,6 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                             // If R_ct == 0, as this is the final smoothing scale (i.e. it is reversed)
                             if (R_ct == 0)
                             {
-
-                                Refine_T_Radio(previous_spin_temp, this_spin_temp, prev_redshift, redshift, astro_params, flag_options);
-                                Radio_Temp = this_spin_temp->Trad_box[box_ct];
 
                                 // Note here, that by construction it doesn't matter if using MINIMIZE_MEMORY as only need the R_ct = 0 box
                                 curr_delNL0 = delNL0[0][box_ct];
@@ -2656,7 +2459,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
 
                                 // update quantities
                                 x_e += (dxe_dzp + dxedz_dm) * dzp; // remember dzp is negative
-                                if (x_e > 1)                                       // can do this late in evolution if dzp is too large
+                                if (x_e > 1)                       // can do this late in evolution if dzp is too large
                                     x_e = 1 - FRACT_FLOAT_ERR;
                                 else if (x_e < 0)
                                     x_e = 0;
@@ -2710,7 +2513,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
 
                                 // if (J_alpha_tot > 1.0e-20) { // Must use WF effect
                                 //  New in v1.4
-                                Trad_inv = 1 / (Radio_Temp + T_cmb * (1 + redshift));
+                                Trad_inv = 1 / (T_cmb * (1 + redshift));
                                 if (fabs(J_alpha_tot) > 1.0e-20)
                                 { // Must use WF effect
                                     TS_fast = Trad_fast;
@@ -2764,22 +2567,11 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
 
                                 x_e_ave += x_e;
 
-                                Radio_Temp_ave += Radio_Temp / ((double)HII_TOT_NUM_PIXELS);
                             }
                         }
                     }
                 }
 
-                if (Radio_Silent == 0)
-                {
-                    LOG_ULTRA_DEBUG("Average T_Radio = %f\n", Radio_Temp_ave);
-                }
-
-                if (isfinite(Radio_Temp_ave) == 0)
-                {
-                    LOG_ERROR("Average Radio temperature is infinite or NaN!");
-                    Throw(InfinityorNaNError);
-                }
             }
             else
             {
@@ -2822,8 +2614,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                         dstarlya_dt = 0;
 
                         curr_delNL0 = delNL0_rev[box_ct][0];
-                        Radio_Temp = Radio_Temp_HMG;
-
+                        
                         if (!NO_LIGHT)
                         {
                             // Now determine all the differentials for the heating/ionisation rate equations
@@ -2844,9 +2635,6 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                                     dfcoll_dz_val = ST_over_PS[R_ct] * (1. + delNL0_rev[box_ct][R_ct] * zpp_growth[R_ct]) * (dfcoll_dz(zpp_for_evolve_list[R_ct], sigma_Tmin[R_ct], delNL0_rev[box_ct][R_ct], sigma_atR[R_ct]));
                                 }
 
-                                // What is dfcoll_dz_val: (1+z')^{-\alpha} dz' (1+\delta_{nl}) * df_{coll}/dz'
-                                // Or as in my note.pdf: dfcoll_dz_val = Phi*dzpp
-                                
                                 dxheat_dt += dfcoll_dz_val *
                                              ((freq_int_heat_tbl_diff[m_xHII_low][R_ct]) * inverse_val + freq_int_heat_tbl[m_xHII_low][R_ct]);
                                 dxion_source_dt += dfcoll_dz_val *
@@ -2890,8 +2678,8 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                         dxheat_dzp = dxheat_dt * dt_dzp * 2.0 / 3.0 / k_B / (1.0 + x_e);
                         // update quantities
 
-                        x_e += dxe_dzp * dzp; 
-                        if (x_e > 1)                            // can do this late in evolution if dzp is too large
+                        x_e += dxe_dzp * dzp;
+                        if (x_e > 1) // can do this late in evolution if dzp is too large
                             x_e = 1 - FRACT_FLOAT_ERR;
                         else if (x_e < 0)
                             x_e = 0;
@@ -2914,7 +2702,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                         // Algorithm is the same, but written to be more computationally efficient
                         T_inv = pow(T, -1.);
                         T_inv_sq = pow(T, -2.);
-                        Trad_inv = 1 / (Radio_Temp + T_cmb * (1 + redshift));
+                        Trad_inv = 1 / (T_cmb * (1 + redshift));
 
                         xc_fast = (1.0 + curr_delNL0 * growth_factor_zp) * xc_inverse * ((1.0 - x_e) * No * kappa_10(T, 0) + x_e * N_b0 * kappa_10_elec(T, 0) + x_e * No * kappa_10_pH(T, 0));
                         xi_power = TS_prefactor * pow((1.0 + curr_delNL0 * growth_factor_zp) * (1.0 - x_e) * T_inv_sq, 1.0 / 3.0);
@@ -2953,8 +2741,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                         }
 
                         this_spin_temp->Ts_box[box_ct] = TS_fast;
-                        this_spin_temp->Trad_box[box_ct] = Radio_Temp;
-
+                        
                         if (LOG_LEVEL >= DEBUG_LEVEL)
                         {
                             J_alpha_ave += J_alpha_tot;
@@ -2981,10 +2768,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
             }
 
             // ---- Computing averaged quantities ----
-            T_IGM_ave = 0.0;
-            Phi_ave = 0.0;
-            Phi_ave_mini = 0.0;
-
+            
             for (box_ct = 0; box_ct < HII_TOT_NUM_PIXELS; box_ct++)
             {
                 // #1: Gas temperature
@@ -2994,83 +2778,6 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                     //                Throw(ParameterError);
                     Throw(InfinityorNaNError);
                 }
-                T_IGM_ave += this_spin_temp->Tk_box[box_ct] / ((double)HII_TOT_NUM_PIXELS);
-
-                // #2: Phi and Phi_mini
-                // at this stage R_ct woube be 0 anyway
-                if (flag_options->USE_MASS_DEPENDENT_ZETA)
-                {
-                    Phi_ave += dfcoll_dz_val * (double)del_fcoll_Rct[box_ct] / ((double)HII_TOT_NUM_PIXELS) / dzpp_Rct0;
-                    if (flag_options->USE_MINI_HALOS)
-                    {
-                        Phi_ave_mini += dfcoll_dz_val_MINI * (double)del_fcoll_Rct_MINI[box_ct] / ((double)HII_TOT_NUM_PIXELS) / dzpp_Rct0;
-                    }
-                }
-                else
-                {
-                    Phi_ave += fabs(dfcoll_dz_val / dzpp_Rct0 / ((double)HII_TOT_NUM_PIXELS));
-                }
-            }
-
-            // Caching averaged quantities
-            if (this_spin_temp->first_box)
-            {
-                this_spin_temp->SFRD_box[0] = 1.0;
-                this_spin_temp->SFRD_box[1] = global_params.Z_HEAT_MAX;
-                this_spin_temp->SFRD_box[2] = 0.0;
-                this_spin_temp->SFRD_box[3] = Tk_BC;
-                this_spin_temp->SFRD_box[4] = 0.0;
-                this_spin_temp->SFRD_box[5] = zpp_for_evolve_list[0];
-            }
-            else
-            {
-
-                if (Debug_Printer == 1)
-                {
-                    remove("SFRD_box_tmp.txt");
-                    OutputFile = fopen("SFRD_box_tmp.txt", "a");
-                    fprintf(OutputFile, "     z           Phi            Tk          Phi_mini       zpp[0]\n");
-                }
-
-                this_spin_temp->SFRD_box[0] = previous_spin_temp->SFRD_box[0] + 1.0;
-
-                // Copying previous box
-                for (idx = 1; idx <= ArchiveSize; idx++)
-                {
-
-                    zid = (idx - 1) * 5 + 1;
-                    fid = zid + 1;
-                    tid = zid + 2;
-                    sid = zid + 3;
-                    xid = zid + 4;
-
-                    this_spin_temp->SFRD_box[zid] = previous_spin_temp->SFRD_box[zid];
-                    this_spin_temp->SFRD_box[fid] = previous_spin_temp->SFRD_box[fid];
-                    this_spin_temp->SFRD_box[tid] = previous_spin_temp->SFRD_box[tid];
-                    this_spin_temp->SFRD_box[sid] = previous_spin_temp->SFRD_box[sid];
-                    this_spin_temp->SFRD_box[xid] = previous_spin_temp->SFRD_box[xid];
-
-                    if (Debug_Printer == 1)
-                    {
-                        fprintf(OutputFile, "%f   ", this_spin_temp->SFRD_box[zid]);
-                        fprintf(OutputFile, "%E   ", this_spin_temp->SFRD_box[fid]);
-                        fprintf(OutputFile, "%E   ", this_spin_temp->SFRD_box[tid]);
-                        fprintf(OutputFile, "%E   ", this_spin_temp->SFRD_box[sid]);
-                        fprintf(OutputFile, "%f\n", this_spin_temp->SFRD_box[xid]);
-                    }
-                }
-
-                if (Debug_Printer == 1)
-                {
-                    fclose(OutputFile);
-                }
-
-                // Save results for this redshift
-                this_spin_temp->SFRD_box[zid + 5] = redshift;
-                this_spin_temp->SFRD_box[fid + 5] = Phi_ave;
-                this_spin_temp->SFRD_box[tid + 5] = T_IGM_ave;
-                this_spin_temp->SFRD_box[sid + 5] = Phi_ave_mini;
-                this_spin_temp->SFRD_box[xid + 5] = zpp_for_evolve_list[0];
             }
 
             LOG_SUPER_DEBUG("finished loop");
@@ -3103,8 +2810,8 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                 else
                 {
                     LOG_DEBUG("zp = %e Ts_ave = %e x_e_ave = %e Tk_ave = %e J_alpha_ave = %e xalpha_ave = %e \
-                          Xheat_ave = %e Xion_ave = %e T_Radio = %e",
-                              zp, Ts_ave, x_e_ave, Tk_ave, J_alpha_ave, xalpha_ave, Xheat_ave, Xion_ave, Radio_Temp_ave);
+                          Xheat_ave = %e Xion_ave = %e",
+                              zp, Ts_ave, x_e_ave, Tk_ave, J_alpha_ave, xalpha_ave, Xheat_ave, Xion_ave);
                 }
             }
 

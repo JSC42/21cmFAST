@@ -140,15 +140,8 @@ struct TsBox
     float *x_e_box;
     float *Tk_box;
     float *J_21_LW_box;
-    // Boxes for Inhomogeneous Radio Background
-    float *Trad_box;
-
+    // Boxes for Inhomogeneous DM Boost
     float *Boost_box;
-    // For averaged quantities from previous boxes, to be updated at every z step
-    // SFRD_box[0] specifies box length
-    // Data structure: [z, SFRD, Tk, f4, f5]
-    // [f4 - f5] are redundency memory, just in case we need to store other stuff
-    float *SFRD_box;
 };
 
 struct IonizedBox

@@ -626,6 +626,10 @@ class FlagOptions(StructWithDefaults):
         Determines whether to use a fixed vcb=VAVG (*regardless* of USE_RELATIVE_VELOCITIES). It includes the average effect of velocities but not its fluctuations. See Muñoz+21 (2110.13919).
     USE_VELS_AUX: bool, optional
         Auxiliary variable (not input) to check if minihaloes are being used without relative velocities and complain
+    USE_HALO_BOOST: bool, optional
+        Whether to use boost for annihilating DM, default false
+    INHOMO_HALO_BOOST: boo, optional
+        Whether to use inhomogeneous boost for annihilating DM, default false
     """
 
     _ffi = ffi
@@ -640,6 +644,8 @@ class FlagOptions(StructWithDefaults):
         "M_MIN_in_Mass": False,
         "PHOTON_CONS": False,
         "FIX_VCB_AVG": False,
+        "USE_HALO_BOOST": False,
+        "INHOMO_HALO_BOOST": False,
     }
 
     @property
@@ -796,6 +802,9 @@ class AstroParams(StructWithDefaults):
         Impact of the LW feedback on Mturn for minihaloes. Default is 22.8685 and 0.47 following Machacek+01, respectively. Latest simulations suggest 2.0 and 0.6. See Sec 2 of Muñoz+21 (2110.13919).
     A_VCB, BETA_VCB: float, optional
         Impact of the DM-baryon relative velocities on Mturn for minihaloes. Default is 1.0 and 1.8, and agrees between different sims. See Sec 2 of Muñoz+21 (2110.13919).
+    Pann27: float, optional
+        <sv>/m for annihilating DM, in 10^-27cm^3/s/GeV, default 0
+
     """
 
     _ffi = ffi
@@ -824,6 +833,7 @@ class AstroParams(StructWithDefaults):
         "BETA_LW": 0.6,
         "A_VCB": 1.0,
         "BETA_VCB": 1.8,
+        "Pann27": 0.0,
     }
 
     def __init__(
@@ -953,3 +963,9 @@ def validate_all_inputs(
         logger.warning(
             "USE_MINI_HALOS needs USE_RELATIVE_VELOCITIES to get the right evolution!"
         )
+    if flag_options is not None:
+        if flag_options.INHOMO_RECO and not flag_options.USE_HALO_BOOST:
+            raise ValueError("INHOMO_RECO requires USE_HALO_BOOST!")
+
+    
+    

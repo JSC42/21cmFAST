@@ -1,4 +1,3 @@
-#include "RadioExcess.h"
 #include "Halo_Boost.h"
 
 // Re-write of find_HII_bubbles.c for being accessible within the MCMC
@@ -55,17 +54,14 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
             writeAstroParams(flag_options, astro_params);
         }
 
-        // All these are variables for PBH&Radio Background
-        double Trad_inv, Halo_Boost_Tab[PBH_Table_Size];
-        double Delta_Min, Delta_Max, Maximum_Mh, PBH_sigmaMmax, Delta_Width, Grid_Delta, Mininum_Mh, HubbleFactor, Halo_Boost_ave, dxedz_dm, dtdz_dm;
-        double Reset_MinM, Halo_Boost_User;
+        // All these are variables for DM Boost
+        double Trad_inv, Halo_Boost_Tab[Boost_Interp_Table_Size], Reset_MinM, Halo_Boost_User;
+        double Delta_Min, Delta_Max, DM_sigmaMmax, Delta_Width, Grid_Delta, Halo_Boost_ave, dxedz_dm, dtdz_dm;
         int idx, R_values_ready;
 
-        // double PBH_Fcoll_Table[PBH_Table_Size];
-        
         // Initialising some variables
         R_values_ready = 0;
-        
+
         // Makes the parameter structs visible to a variety of functions/macros
         // Do each time to avoid Python garbage collection issues
         Broadcast_struct_global_PS(user_params, cosmo_params);
@@ -179,6 +175,11 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
         else
         {
             Reset_MinM = -10.0;
+        }
+
+        for (box_ct = 0; box_ct < HII_TOT_NUM_PIXELS; box_ct++)
+        {
+            this_spin_temp->Boost_box[box_ct] = 1.0; // always do this, maybe not neccesary
         }
 
         double total_time, total_time2, total_time3, total_time4;
@@ -563,7 +564,6 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                             this_spin_temp->Ts_box[HII_R_INDEX(i, j, k)] = get_Ts(redshift,
                                                                                   perturbed_field->density[HII_R_INDEX(i, j, k)] * inverse_growth_factor_z * growth_factor_zp,
                                                                                   TK, xe, 0, &curr_xalpha);
-                            this_spin_temp->Boost_box[HII_R_INDEX(i, j, k)] = 1.0; // Initialize to 1
                         }
                     }
                 }
@@ -1826,7 +1826,6 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                         del_fcoll_Rct[box_ct] = 0.;
 
                         dxheat_dt_box[box_ct] = 0.;
-                        this_spin_temp->Boost_box[box_ct] = 1.0;           // I don't think this is required
                         dxion_source_dt_box[box_ct] = 0.;
                         dxlya_dt_box[box_ct] = 0.;
                         dstarlya_dt_box[box_ct] = 0.;
@@ -1862,16 +1861,6 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
 
                 for (R_ct = global_params.NUM_FILTER_STEPS_FOR_Ts; R_ct--;)
                 {
-
-                    HubbleFactor = hubble(zpp_for_evolve_list[R_ct]);
-                    // Initializing interpolation boundary for overdensity
-                    Delta_Min = 0.0;
-                    Delta_Max = 0.0;
-                    if (flag_options->USE_RADIO_PBH)
-                    {
-                        Maximum_Mh = RtoM(R_values[R_ct]);
-                        PBH_sigmaMmax = sigma_z0(Maximum_Mh);
-                    }
 
                     if (!user_params->USE_INTERPOLATION_TABLES)
                     {
@@ -1960,33 +1949,6 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                         }
                     }
 
-                    // Determine overdensity boundary
-                    // This should not be done in omp parallel loop otherwise result could be wrong if using multiple threads
-                    // There might also be existing module for overdensity boundary, check again
-                    if (flag_options->USE_RADIO_PBH)
-                    {
-                        for (box_ct = 0; box_ct < HII_TOT_NUM_PIXELS; box_ct++)
-                        {
-                            if (user_params->MINIMIZE_MEMORY)
-                            {
-                                curr_dens = delNL0[0][box_ct] * zpp_growth[R_ct];
-                            }
-                            else
-                            {
-                                curr_dens = delNL0[R_ct][box_ct] * zpp_growth[R_ct];
-                            }
-
-                            if (curr_dens > Delta_Max)
-                            {
-                                Delta_Max = curr_dens;
-                            }
-
-                            if (curr_dens < Delta_Min)
-                            {
-                                Delta_Min = curr_dens;
-                            }
-                        }
-                    }
 
 #pragma omp parallel shared(delNL0, zpp_growth, SFRD_z_high_table, fcoll_interp_high_min, fcoll_interp_high_bin_width_inv, log10_SFRD_z_low_table,                                                                                                                                         \
                                 fcoll_int_boundexceeded_threaded, log10_Mcrit_LW, SFRD_z_high_table_MINI,                                                                                                                                                                                  \
@@ -2221,71 +2183,75 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                         dstarlyLW_dt_prefactor_MINI[R_ct] *= dfcoll_dz_val_MINI;
                     }
 
-                    if (flag_options->USE_RADIO_PBH)
+                    // Let's do all DM stuff here, the only pre-requirsite:
+                    // Reset_MinM : Set HMF boundary
+                    // R_values_ready : needed to set DM_sigmaMmax, though maybe not essential
+                    if ((R_ct == 0) && flag_options->USE_HALO_BOOST)
                     {
-
-                        // Minimum halo mass in the integration, in Msun
-                        
-                        if (Delta_Min < -1.0)
-                        {
-                            Delta_Min = -0.99;
-                        }
-
-                        if (Delta_Min >= Delta_Max)
-                        {
-                            // Don't know why this would happen
-                            Delta_Max = Delta_Min + 0.5;
-                        }
-
                         if (R_values_ready == 0)
-                        {
+                        { // We need R_values to set sigma
                             LOG_ERROR("R_values_ready is false, check what happened\n");
                             Throw(ValueError);
                         }
+                        DM_sigmaMmax = sigma_z0(RtoM(R_values[R_ct])); // If this fails we can also replace RtoM with 1e20 I guess
 
-                        Delta_Width = (Delta_Max - Delta_Min) / ((double)PBH_Table_Size - 1);
-                        Grid_Delta = Delta_Min;
-
-                        if (R_ct == 0)
+                        // Find Overdensity boundaries
+                        Delta_Min = 0.;
+                        Delta_Max = 0.;
+                        for (box_ct = 0; box_ct < HII_TOT_NUM_PIXELS; box_ct++)
                         {
-                            if (flag_options->USE_HALO_BOOST)
+                            if (user_params->MINIMIZE_MEMORY)
                             {
-                                Halo_Boost_User = BoostFactor(zpp_for_evolve_list[R_ct], zpp_growth[R_ct], 0.0, PBH_sigmaMmax, cosmo_params, user_params->HMF);
+                                curr_dens = delNL0[0][box_ct] * zpp_growth[R_ct];
                             }
                             else
                             {
-                                Halo_Boost_User = 1.0;
+                                curr_dens = delNL0[R_ct][box_ct] * zpp_growth[R_ct];
+                            }
+
+                            if (curr_dens > Delta_Max)
+                            {
+                                Delta_Max = curr_dens;
+                            }
+
+                            if (curr_dens < Delta_Min)
+                            {
+                                Delta_Min = curr_dens;
                             }
                         }
-
-                        // Fill the interpolation array
-                        for (idx = 0; idx < PBH_Table_Size; idx++)
+                        if (Delta_Min < -1.0)
                         {
-                            // PBH_Fcoll_Table[idx] = Nion_ConditionalM(zpp_growth[R_ct], log(Mininum_Mh), log(Maximum_Mh), PBH_sigmaMmax, Deltac, Grid_Delta, 0.0, 0.0, 0.0, 1., 1., Mlim_Fstar, 0., user_params->FAST_FCOLL_TABLES);
+                            // Could be some numerical things, show warnings
+                            printf("Warning: Delta_Min < -1, resetting to -1, original value: %f\n", Delta_Min);
+                            Delta_Min = -0.99;
+                        }
+                        if (Delta_Min >= Delta_Max)
+                        {
+                            // Don't know why this would happen
+                            LOG_ERROR("Delta_Min is larger than Delta_Max");
+                            Throw(ValueError);
+                            // Delta_Max = Delta_Min + 0.5;
+                        }
 
-                            // Also fill Boost_Tab for R_ct 0
-                            if (R_ct == 0)
+                        // Compute interpolation array for Boost
+                        Halo_Boost_User = BoostFactor(zpp_for_evolve_list[0], zpp_growth[0], 0., DM_sigmaMmax, cosmo_params, user_params->HMF);
+                        Delta_Width = (Delta_Max - Delta_Min) / ((double)Boost_Interp_Table_Size - 1);
+                        Grid_Delta = Delta_Min;
+                        for (idx = 0; idx < Boost_Interp_Table_Size; idx++)
+                        {
+
+                            if (flag_options->INHOMO_HALO_BOOST)
                             {
-                                if (flag_options->USE_HALO_BOOST)
-                                {
-                                    if (flag_options->INHOMO_HALO_BOOST)
-                                    {
-                                        Halo_Boost_Tab[idx] = BoostFactor(zpp_for_evolve_list[R_ct], zpp_growth[R_ct], Grid_Delta, PBH_sigmaMmax, cosmo_params, -1);
-                                    }
-                                    else
-                                    {
-                                        Halo_Boost_Tab[idx] = Halo_Boost_User;
-                                    }
-                                }
-                                else
-                                {
-                                    Halo_Boost_Tab[idx] = 1.0;
-                                }
+                                Halo_Boost_Tab[idx] = BoostFactor(zpp_for_evolve_list[0], zpp_growth[0], Grid_Delta, DM_sigmaMmax, cosmo_params, -1);
                             }
-
+                            else
+                            {
+                                Halo_Boost_Tab[idx] = Halo_Boost_User;
+                            }
                             Grid_Delta += Delta_Width;
                         }
 
+                        // Get correct normalisation
                         Halo_Boost_ave = 0.0;
                         for (box_ct = 0; box_ct < HII_TOT_NUM_PIXELS; box_ct++)
                         {
@@ -2298,32 +2264,29 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                                 Grid_Delta = delNL0[R_ct][box_ct] * zpp_growth[R_ct];
                             }
 
-                            if ((R_ct == 0) && flag_options->USE_HALO_BOOST)
-                            {
-                                Halo_Boost_ave += Interp_Fast(Halo_Boost_Tab, Delta_Min, Delta_Max, PBH_Table_Size, Grid_Delta);
-                            }
+                            Halo_Boost_ave += Interp_Fast(Halo_Boost_Tab, Delta_Min, Delta_Max, Boost_Interp_Table_Size, Grid_Delta);
                         }
-                        if ((R_ct == 0) && flag_options->USE_HALO_BOOST)
+                        Halo_Boost_ave = Halo_Boost_ave / ((double)HII_TOT_NUM_PIXELS);
+                        for (idx = 0; idx < Boost_Interp_Table_Size; idx++)
                         {
-                            Halo_Boost_ave = Halo_Boost_ave / ((double)HII_TOT_NUM_PIXELS);
+                            Halo_Boost_Tab[idx] = Halo_Boost_User * Halo_Boost_Tab[idx] / Halo_Boost_ave;
                         }
-                        for (idx = 0; idx < PBH_Table_Size; idx++)
+
+                        if (print_debug_info)
                         {
-                            if ((R_ct == 0) && flag_options->USE_HALO_BOOST)
-                            {
-                                Halo_Boost_Tab[idx] = Halo_Boost_User * Halo_Boost_Tab[idx] / Halo_Boost_ave;
-                            }
+                            printf("%f  %E  %E  %E\n", redshift, Halo_Boost_User, Delta_Min, Delta_Max);
                         }
                     }
 
-#pragma omp parallel shared(dxheat_dt_box, dxion_source_dt_box, dxlya_dt_box, dstarlya_dt_box, dfcoll_dz_val, del_fcoll_Rct, freq_int_heat_tbl_diff,                                                                                                                      \
-                                m_xHII_low_box, inverse_val_box, freq_int_heat_tbl, freq_int_ion_tbl_diff, freq_int_ion_tbl, freq_int_lya_tbl_diff,                                                                                                                       \
-                                freq_int_lya_tbl, dstarlya_dt_prefactor, R_ct, previous_spin_temp, this_spin_temp, const_zp_prefactor, prefactor_1,                                                                                                                       \
-                                prefactor_2, delNL0, growth_factor_zp, dt_dzp, zp, dgrowth_factor_dzp, dcomp_dzp_prefactor, Trad_fast, dzp, TS_prefactor,                                                                                                                 \
-                                xc_inverse, Trad_fast_inv, dstarlyLW_dt_box, dstarlyLW_dt_prefactor, dxheat_dt_box_MINI, dxion_source_dt_box_MINI,                                                                                                                        \
-                                dxlya_dt_box_MINI, dstarlya_dt_box_MINI, dstarlyLW_dt_box_MINI, dfcoll_dz_val_MINI, del_fcoll_Rct_MINI,                                                                                                                                   \
-                                dstarlya_dt_prefactor_MINI, dstarlyLW_dt_prefactor_MINI, prefactor_2_MINI, const_zp_prefactor_MINI) private(box_ct, x_e, T, dxion_sink_dt, dxe_dzp, dadia_dzp, dspec_dzp, dcomp_dzp, dxheat_dzp, J_alpha_tot, T_inv, T_inv_sq,            \
-                                                                                                                                                xc_fast, xi_power, xa_tilde_fast_arg, TS_fast, TSold_fast, xa_tilde_fast, dxheat_dzp_MINI, J_alpha_tot_MINI, curr_delNL0) \
+#pragma omp parallel shared(dxheat_dt_box, dxion_source_dt_box, dxlya_dt_box, dstarlya_dt_box, dfcoll_dz_val, del_fcoll_Rct, freq_int_heat_tbl_diff,                                            \
+                                m_xHII_low_box, inverse_val_box, freq_int_heat_tbl, freq_int_ion_tbl_diff, freq_int_ion_tbl, freq_int_lya_tbl_diff,                                             \
+                                freq_int_lya_tbl, dstarlya_dt_prefactor, R_ct, previous_spin_temp, this_spin_temp, const_zp_prefactor, prefactor_1,                                             \
+                                prefactor_2, delNL0, growth_factor_zp, dt_dzp, zp, dgrowth_factor_dzp, dcomp_dzp_prefactor, Trad_fast, dzp, TS_prefactor,                                       \
+                                xc_inverse, Trad_fast_inv, dstarlyLW_dt_box, dstarlyLW_dt_prefactor, dxheat_dt_box_MINI, dxion_source_dt_box_MINI,                                              \
+                                dxlya_dt_box_MINI, dstarlya_dt_box_MINI, dstarlyLW_dt_box_MINI, dfcoll_dz_val_MINI, del_fcoll_Rct_MINI, zpp_growth,                                             \
+                                dstarlya_dt_prefactor_MINI, dstarlyLW_dt_prefactor_MINI, prefactor_2_MINI,                                                                                      \
+                                const_zp_prefactor_MINI) private(box_ct, x_e, T, dxion_sink_dt, dxe_dzp, dadia_dzp, dspec_dzp, dcomp_dzp, dxheat_dzp, J_alpha_tot, T_inv, T_inv_sq, Grid_Delta, \
+                                                                     xc_fast, xi_power, xa_tilde_fast_arg, TS_fast, TSold_fast, xa_tilde_fast, dxheat_dzp_MINI, J_alpha_tot_MINI, curr_delNL0)  \
     num_threads(user_params->N_THREADS)
                     {
 #pragma omp for reduction(+ : J_alpha_ave, xalpha_ave, Xheat_ave, Xion_ave, Ts_ave, Tk_ave, x_e_ave, J_alpha_ave_MINI, Xheat_ave_MINI, J_LW_ave, J_LW_ave_MINI)
@@ -2361,7 +2324,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                             {
                                 dxheat_dt_box[box_ct] += 0.;
                                 dxion_source_dt_box[box_ct] += 0.;
-                                
+
                                 dxlya_dt_box[box_ct] += 0.;
                                 dstarlya_dt_box[box_ct] += 0.;
 
@@ -2395,11 +2358,10 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
 
                                 if (flag_options->USE_HALO_BOOST)
                                 {
-                                    this_spin_temp->Boost_box[box_ct] = Interp_Fast(Halo_Boost_Tab, Delta_Min, Delta_Max, PBH_Table_Size, Grid_Delta);
+                                    this_spin_temp->Boost_box[box_ct] = Interp_Fast(Halo_Boost_Tab, Delta_Min, Delta_Max, Boost_Interp_Table_Size, Grid_Delta);
                                 }
-
-                                dxedz_dm = DM_Term(zpp_for_evolve_list[0], this_spin_temp->Boost_box[box_ct], Grid_Delta, astro_params, flag_options, x_e, dt_dzp, 1);
-                                dtdz_dm = DM_Term(zpp_for_evolve_list[0], this_spin_temp->Boost_box[box_ct], Grid_Delta, astro_params, flag_options, x_e, dt_dzp, 4);
+                                dxedz_dm = EoR_Drive_DM(zpp_for_evolve_list[0], this_spin_temp->Boost_box[box_ct], Grid_Delta, astro_params, flag_options, x_e, dt_dzp, 1);
+                                dtdz_dm = EoR_Drive_DM(zpp_for_evolve_list[0], this_spin_temp->Boost_box[box_ct], Grid_Delta, astro_params, flag_options, x_e, dt_dzp, 4);
 
                                 // add prefactors
                                 dxheat_dt_box[box_ct] *= const_zp_prefactor;
@@ -2566,12 +2528,10 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                                 }
 
                                 x_e_ave += x_e;
-
                             }
                         }
                     }
                 }
-
             }
             else
             {
@@ -2614,7 +2574,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                         dstarlya_dt = 0;
 
                         curr_delNL0 = delNL0_rev[box_ct][0];
-                        
+
                         if (!NO_LIGHT)
                         {
                             // Now determine all the differentials for the heating/ionisation rate equations
@@ -2741,7 +2701,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                         }
 
                         this_spin_temp->Ts_box[box_ct] = TS_fast;
-                        
+
                         if (LOG_LEVEL >= DEBUG_LEVEL)
                         {
                             J_alpha_ave += J_alpha_tot;
@@ -2768,7 +2728,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
             }
 
             // ---- Computing averaged quantities ----
-            
+
             for (box_ct = 0; box_ct < HII_TOT_NUM_PIXELS; box_ct++)
             {
                 // #1: Gas temperature

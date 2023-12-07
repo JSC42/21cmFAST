@@ -107,7 +107,7 @@ double HaloProfile_Integrator(double z, double mh)
     res = pow(rho_cr * delta_c, 2.0);
     res = res * pow(r_vir / c / (1. + c), 3.0);
     res = res / 3.0 * (pow(1. + c, 3.) - 1.0);
-    res = res / 1.0e18; // convert to msun^2/Mpc^3
+    res = res * 1.0e18; // convert to msun^2/Mpc^3
 
     return res;
 }
@@ -242,6 +242,7 @@ double BoostFactor(double z, double growthf, double delta, double sigma2, struct
     }
 
     res = pow(1. - fcoll, 2.) + Halo;
+    
     res = fmax(1., res);
 
     return res;

@@ -964,8 +964,8 @@ def validate_all_inputs(
             "USE_MINI_HALOS needs USE_RELATIVE_VELOCITIES to get the right evolution!"
         )
     if flag_options is not None:
-        if flag_options.INHOMO_RECO and not flag_options.USE_HALO_BOOST:
-            raise ValueError("INHOMO_RECO requires USE_HALO_BOOST!")
+        if flag_options.INHOMO_HALO_BOOST and not flag_options.USE_HALO_BOOST:
+            raise ValueError("INHOMO_HALO_BOOST requires USE_HALO_BOOST!")
 
     
     

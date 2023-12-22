@@ -53,6 +53,10 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
         {
             writeAstroParams(flag_options, astro_params);
         }
+        if (print_debug_info)
+        {
+            printf("%f\n", redshift);
+        }
 
         // All these are variables for DM Boost
         double Trad_inv, Halo_Boost_Tab[Boost_Interp_Table_Size], Reset_MinM, Halo_Boost_User;

@@ -177,6 +177,9 @@ double Conditional_HMF(double growthf, double M, double Delta, double sigma2, st
 
     // This should be positive anyway, check where the - sign comes from
     return fabs(-RhoM_gird * dNdM_double / M / sqrt(2 * PI));
+    // printf("Using debug version for Conditional_HMF\n");
+    // return fabs(-RhoM * dNdM_double / M / sqrt(2 * PI));
+
 }
 
 double BoostFactor(double z, double growthf, double delta, double sigma2, struct CosmoParams *cosmo_params, int hmf_model)
@@ -244,6 +247,15 @@ double BoostFactor(double z, double growthf, double delta, double sigma2, struct
     res = pow(1. - fcoll, 2.) + Halo;
     
     res = fmax(1., res);
+    /*
+    if (print_debug_info && hmf_model != -1)
+    {
+        FILE *OutputFile;
+        OutputFile = fopen("Fcoll_tmp.txt", "a");
+        fprintf(OutputFile, "%f   %E\n", z, fcoll);
+        fclose(OutputFile);
+    }
+    */
 
     return res;
 }

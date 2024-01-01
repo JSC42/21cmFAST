@@ -1,5 +1,5 @@
 // Halo Boost Factor module
-#define print_debug_info 1
+#define print_debug_info 0
 #define Boost_nmh 1000
 #define Boost_Interp_Table_Size 200
 

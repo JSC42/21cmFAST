@@ -24,7 +24,7 @@ eor_colour = colors.LinearSegmentedColormap.from_list(
         (1, "cyan"),
     ],
 )
-plt.register_cmap(cmap=eor_colour)
+# plt.register_cmap(cmap=eor_colour) # Feature deprecated from new matplotlib
 
 
 def _imshow_slice(

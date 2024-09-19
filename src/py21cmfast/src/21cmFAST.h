@@ -80,9 +80,10 @@ struct FlagOptions
     bool M_MIN_in_Mass;
     bool PHOTON_CONS;
     bool FIX_VCB_AVG;
-    // Settings for Radio Excess
+    // Settings for Dark Matter
     bool USE_HALO_BOOST;
     bool INHOMO_HALO_BOOST;
+    bool DM_Dep_Method;
 };
 
 struct InitialConditions

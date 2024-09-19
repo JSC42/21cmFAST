@@ -262,8 +262,11 @@ double BoostFactor(double z, double growthf, double delta, double sigma2, struct
 
 double EoR_Drive_DM(double z, double Boost, double Delta, struct AstroParams *astro_params, struct FlagOptions *flag_options, double xe, double dt_dzp, int Type)
 {
-    // Ok I am doing everything in SI units
-    double RhoC_c2_2, Pann, Q, P27, dEdVdt_Inj, nH, dxe_dt, dT_dt, fHe, dxe_dz, dT_dz, B, ntot, f1, f4, kB;
+    /*
+    Get dxe/dz and dT/dz from DM injection
+    I am doing everything in SI units
+    */
+    double RhoC_c2_2, Pann, Q, P27, dEdVdt_Inj, nH, dxe_dt, dT_dt, fHe, dxe_dz, dT_dz, B, ntot, kB, f_HIon, f_Heat, f_LyA;
     if (flag_options->USE_HALO_BOOST)
     {
         B = Boost;
@@ -287,14 +290,14 @@ double EoR_Drive_DM(double z, double Boost, double Delta, struct AstroParams *as
     nH = 0.19015670534605955 * pow(1.0 + z, 3.0) * (1.0 + Delta);
 
     // First do ionisation, I am not gonna do LyA yet
-    f1 = (1.0 - xe) / 3.0;
+    f_HIon = (1.0 - xe) / 3.0;
     // ok this is somewhat inaccurate, we are not doing Helium here but we are assuming that xe is shared by H and He. should mention this in our paper
-    dxe_dt = f1 * dEdVdt_Inj / (13.6 * Q * nH);
+    dxe_dt = f_HIon * dEdVdt_Inj / (13.6 * Q * nH);
 
     // Do heating
-    f4 = (1.0 + 2 * xe) / 3.0;
+    f_Heat = (1.0 + 2 * xe) / 3.0;
     ntot = nH * (1. + fHe + xe + 2.0 * xe * fHe); // proton, neutral He, e from H, e from He
-    dT_dt = f4 * dEdVdt_Inj * 2.0 / (3.0 * kB * ntot);
+    dT_dt = f_Heat * dEdVdt_Inj * 2.0 / (3.0 * kB * ntot);
 
     dxe_dz = dxe_dt * dt_dzp;
     dT_dz = dT_dt * dt_dzp;

@@ -1,4 +1,4 @@
-#include "Halo_Boost.h"
+#include "DarkSide.h"
 
 // Re-write of find_HII_bubbles.c for being accessible within the MCMC
 

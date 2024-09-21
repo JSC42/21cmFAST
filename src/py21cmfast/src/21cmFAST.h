@@ -16,7 +16,6 @@ struct CosmoParams
 
 struct UserParams
 {
-
     // Parameters taken from INIT_PARAMS.H
     int HII_DIM;
     int DIM;
@@ -32,6 +31,9 @@ struct UserParams
     bool FAST_FCOLL_TABLES; // Whether to use the fast Fcoll table approximation in EPS
     bool USE_2LPT;
     bool MINIMIZE_MEMORY;
+    // New Sept 2024
+    int DM_Dep_Method; // SSCK or Tracy
+    int DM_ANN_Channel; // DM annihilation channel, 0 for gamma 1 for e+-
 };
 
 struct AstroParams
@@ -65,7 +67,8 @@ struct AstroParams
 
     int N_RSD_STEPS;
     float Pann27; // <sv>/m for annihilating DM, in 10^-27cm^3/s/GeV
-
+    // New Sept 2024
+    float mdm; // DM mass in GeV
 };
 
 struct FlagOptions
@@ -83,7 +86,6 @@ struct FlagOptions
     // Settings for Dark Matter
     bool USE_HALO_BOOST;
     bool INHOMO_HALO_BOOST;
-    bool DM_Dep_Method;
 };
 
 struct InitialConditions

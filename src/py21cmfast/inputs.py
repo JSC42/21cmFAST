@@ -456,6 +456,14 @@ class UserParams(StructWithDefaults):
     MINIMIZE_MEMORY: bool, optional
         If set, the code will run in a mode that minimizes memory usage, at the expense
         of some CPU/disk-IO. Good for large boxes / small computers.
+    DM_Dep_Method: int, optional
+        Method for computing DM deposition efficiency
+        0 - SSCK
+        1 - Tracy (arXiv: 1506.03811)
+    DM_ANN_Channel: int, optional
+        DM annihilation channel
+        0 - gamma gamma
+        1 - electron+positron
     """
 
     _ffi = ffi
@@ -475,6 +483,8 @@ class UserParams(StructWithDefaults):
         "FAST_FCOLL_TABLES": False,
         "USE_2LPT": True,
         "MINIMIZE_MEMORY": False,
+        "DM_Dep_Method": 0,
+        "DM_ANN_Channel": 0,
     }
 
     _hmf_models = ["PS", "ST", "WATSON", "WATSON-Z"]
@@ -804,7 +814,8 @@ class AstroParams(StructWithDefaults):
         Impact of the DM-baryon relative velocities on Mturn for minihaloes. Default is 1.0 and 1.8, and agrees between different sims. See Sec 2 of Muñoz+21 (2110.13919).
     Pann27: float, optional
         <sv>/m for annihilating DM, in 10^-27cm^3/s/GeV, default 0
-
+    mdm : float, optional
+        DM mass in GeV
     """
 
     _ffi = ffi
@@ -834,6 +845,7 @@ class AstroParams(StructWithDefaults):
         "A_VCB": 1.0,
         "BETA_VCB": 1.8,
         "Pann27": 0.0,
+        "mdm": 100.0,
     }
 
     def __init__(

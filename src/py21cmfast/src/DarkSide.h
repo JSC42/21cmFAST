@@ -415,6 +415,24 @@ double Interp_2D(double Ek, double z, double *Tab)
 
 double Interp_EFF(double z, double m, int particle, int channel, int HMF, int PS, int UseBoost)
 {
+    /*
+    Interpolate DM deposition efficiencies
+    -- inputs --
+    z : z
+    m : DM mass in GeV
+    particle : particle that DM annihilate into
+        0 - gamma gamma
+        1 - electron + positron
+    channel : deposition channel
+        0 - HIon
+        1 - LyA
+        2 - Heat
+    HMF : HMF model, follows UserParams
+    PS : POWER_SPECTRUM in UserParams
+    UseBoost : Whether to use Halo Boost
+        0 - no, ignore HMF and PS
+        1 - yes
+    */
     double Ek, r;
     double EFF_Tab[Redshift_Size*Ek_axis_Size];
     CopyEFF(EFF_Tab, particle, channel, HMF, PS, UseBoost);
@@ -438,14 +456,47 @@ double Interp_EFF(double z, double m, int particle, int channel, int HMF, int PS
     return r;
 }
 
-// double EoR_Drive_DM(double z, double Boost, double Delta, struct AstroParams *astro_params, struct FlagOptions *flag_options, double xe, double dt_dzp, int Type)
-double EoR_Drive_DM(double z, double Boost, double Delta, struct AstroParams *astro_params, struct FlagOptions *flag_options, double xe, double dt_dzp, int Type)
+double PeeblesFactor(double z, double xe, double Tk, double Delta)
+{
+    /*
+    Compute Peebles C factor following Dodelson's Modern Cosmology II (see p108)
+    */
+    double E0, alpha_fsc, hbar, LightSpeed, me, np0, x, fx1, fx2, fx, beta2, L2y, nH, H, La1, La2, La, result;
+    alpha_fsc = 1/137.03599976;
+    E0 = 13.6 * 1.602176634E-19;
+    hbar = 1.0545718002693302e-34;
+    LightSpeed = 299792458.0;
+    me = 9.109383632044565e-31;
+    np0 = 0.1901567053460595;// Number density of H nuclei today
+    // pi = 3.14159265358979323846264338327;
+    
+    x = E0/(Tk * 1.38064852E-23);
+    fx1 = log(x);
+    fx2 = x * exp(x/4.0);
+    fx = fx1/fx2;
+    beta2 = 9.78 * pow(E0/(2 * PI), 1.5) * pow(alpha_fsc, 2.0) /(pow(me, 0.5) * LightSpeed * hbar) * fx;
+    L2y = 8.227;
+    nH = np0 * pow(1.0+z, 3.0) * (1.0-xe) * (1+Delta);
+    // H = 2.192695336552484e-18 * pow(0.69026731839 + 0.30964168161*pow(1.0+z, 3.0) + 9.1E-5 * pow(1.0+z, 4.0), 0.5);
+    H = hubble(z);
+    La1 = H * pow(3.0*E0, 3.0);
+    La2 = nH * pow(8*PI, 2.0) * pow(hbar*LightSpeed, 3.0);
+    La = La1/La2;
+    result = (La + L2y)/(La + L2y + beta2);    
+    if (result < 0.0)
+    {// Raise NaN error
+        result = 0.0/0.0;
+    }
+    return result;
+}
+
+double EoR_Rate_DM(double z, double Boost, double Delta, struct AstroParams *astro_params, struct FlagOptions *flag_options, struct UserParams *user_params, double xe, double Tk, double dt_dzp, int GetIon)
 {
     /*
     Get dxe/dz and dT/dz from DM injection
     I am doing everything in SI units
     */
-    double RhoC_c2_2, Pann, Q, P27, dEdVdt_Inj, nH, dxe_dt, dT_dt, fHe, dxe_dz, dT_dz, B, ntot, kB, f_HIon, f_Heat, f_LyA;
+    double RhoC_c2_2, Pann, Q, P27, dEdVdt_Inj, nH, dxe_dt, dT_dt, fHe, dxe_dz, dT_dz, B, ntot, kB, f_HIon, f_Heat, f_LyA, Peebles;
     if (flag_options->USE_HALO_BOOST)
     {
         B = Boost;
@@ -467,21 +518,30 @@ double EoR_Drive_DM(double z, double Boost, double Delta, struct AstroParams *as
     dEdVdt_Inj = B * Pann * RhoC_c2_2 * pow(1.0 + z, 6.0);
 
     nH = 0.19015670534605955 * pow(1.0 + z, 3.0) * (1.0 + Delta);
-
+    Peebles = PeeblesFactor(z, xe, Tk, Delta);
     // First do ionisation, I am not gonna do LyA yet
-    f_HIon = (1.0 - xe) / 3.0;
+    if (user_params->DM_Dep_Method == 0)
+    {// SSCK
+        f_HIon = (1.0 - xe) / 3.0;
+        f_LyA = (1.0 - xe) / 3.0;
+        f_Heat = (1.0 + 2 * xe) / 3.0;
+    }
+    else
+    {// Tracy, technically in doing so we are missing the feedbacks and inhomogeneuity. To avoid unphysical xe>1 case I am adding a calibration factor of (1-xe) to HIon and LyA
+        f_HIon = (1.0 - xe)*Interp_EFF(z, astro_params->mdm, user_params->DM_ANN_Channel, 0, user_params->HMF, user_params->POWER_SPECTRUM, flag_options->USE_HALO_BOOST);
+        f_LyA = (1.0 - xe)*Interp_EFF(z, astro_params->mdm, user_params->DM_ANN_Channel, 1, user_params->HMF, user_params->POWER_SPECTRUM, flag_options->USE_HALO_BOOST);
+        f_Heat = Interp_EFF(z, astro_params->mdm, user_params->DM_ANN_Channel, 2, user_params->HMF, user_params->POWER_SPECTRUM, flag_options->USE_HALO_BOOST);
+    }
     // ok this is somewhat inaccurate, we are not doing Helium here but we are assuming that xe is shared by H and He. should mention this in our paper
-    dxe_dt = f_HIon * dEdVdt_Inj / (13.6 * Q * nH);
+    dxe_dt = f_HIon * dEdVdt_Inj / (13.6 * Q * nH) + (1 - Peebles) * f_LyA * dEdVdt_Inj/ (10.2 * Q * nH);
 
-    // Do heating
-    f_Heat = (1.0 + 2 * xe) / 3.0;
     ntot = nH * (1. + fHe + xe + 2.0 * xe * fHe); // proton, neutral He, e from H, e from He
     dT_dt = f_Heat * dEdVdt_Inj * 2.0 / (3.0 * kB * ntot);
 
     dxe_dz = dxe_dt * dt_dzp;
     dT_dz = dT_dt * dt_dzp;
 
-    if (Type == 1)
+    if (GetIon == 1)
     {
         return dxe_dz;
     }

@@ -2364,8 +2364,8 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                                 {
                                     this_spin_temp->Boost_box[box_ct] = Interp_Fast(Halo_Boost_Tab, Delta_Min, Delta_Max, Boost_Interp_Table_Size, Grid_Delta);
                                 }
-                                dxedz_dm = EoR_Drive_DM(zpp_for_evolve_list[0], this_spin_temp->Boost_box[box_ct], Grid_Delta, astro_params, flag_options, x_e, dt_dzp, 1);
-                                dtdz_dm = EoR_Drive_DM(zpp_for_evolve_list[0], this_spin_temp->Boost_box[box_ct], Grid_Delta, astro_params, flag_options, x_e, dt_dzp, 4);
+                                dxedz_dm = EoR_Rate_DM(zpp_for_evolve_list[0], this_spin_temp->Boost_box[box_ct], Grid_Delta, astro_params, flag_options, user_params, x_e, T, dt_dzp, 1);
+                                dtdz_dm = EoR_Rate_DM(zpp_for_evolve_list[0], this_spin_temp->Boost_box[box_ct], Grid_Delta, astro_params, flag_options, user_params, x_e, T, dt_dzp, 0);
 
                                 // add prefactors
                                 dxheat_dt_box[box_ct] *= const_zp_prefactor;

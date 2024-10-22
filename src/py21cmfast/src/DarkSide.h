@@ -257,7 +257,6 @@ double BoostFactor(double z, double growthf, double delta, double sigma2, struct
         fclose(OutputFile);
     }
     */
-
     return res;
 }
 

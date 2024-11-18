@@ -518,7 +518,7 @@ double EoR_Rate_DM(double z, double Boost, double Delta, struct AstroParams *ast
 
     nH = 0.19015670534605955 * pow(1.0 + z, 3.0) * (1.0 + Delta);
     Peebles = PeeblesFactor(z, xe, Tk, Delta);
-    // First do ionisation, I am not gonna do LyA yet
+    // First do ionisation
     if (user_params->DM_Dep_Method == 0)
     {// SSCK
         f_HIon = (1.0 - xe) / 3.0;
@@ -534,7 +534,7 @@ double EoR_Rate_DM(double z, double Boost, double Delta, struct AstroParams *ast
     // ok this is somewhat inaccurate, we are not doing Helium here but we are assuming that xe is shared by H and He. should mention this in our paper
     dxe_dt = f_HIon * dEdVdt_Inj / (13.6 * Q * nH) + (1 - Peebles) * f_LyA * dEdVdt_Inj/ (10.2 * Q * nH);
 
-    ntot = nH * (1. + fHe + xe + 2.0 * xe * fHe); // proton, neutral He, e from H, e from He
+    ntot = nH * (1. + xe + fHe + xe * fHe); // proton, neutral He, e from H, e from He, note that He is singly ionized
     dT_dt = f_Heat * dEdVdt_Inj * 2.0 / (3.0 * kB * ntot);
 
     dxe_dz = dxe_dt * dt_dzp;

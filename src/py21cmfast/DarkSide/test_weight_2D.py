@@ -2,7 +2,7 @@ Species = 0
 LineWidth = 1.2
 FontSize = 9
 
-# Compute deposition efficiencies from DM annihilation, this largely follows 10.1088/1475-7516/2022/03/012
+# What is contribution to fc from different z timesteps? 2D version
 import numpy as np
 import h5py, time
 import matplotlib.pyplot as plt

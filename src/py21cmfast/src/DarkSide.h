@@ -494,8 +494,13 @@ double EoR_Rate_DM(double z, double Boost, double Delta, struct AstroParams *ast
     /*
     Get dxe/dz and dT/dz from DM injection
     I am doing everything in SI units
+    ---- inputs ----
+    GetIon : choose output
+        0 - dT/dt
+        1 - dxe/dt
+        2 - J_LyA
     */
-    double RhoC_c2_2, Pann, Q, P27, dEdVdt_Inj, nH, dxe_dt, dT_dt, fHe, dxe_dz, dT_dz, B, ntot, kB, f_HIon, f_Heat, f_LyA, Peebles;
+    double RhoC_c2_2, Pann, Q, P27, dEdVdt_Inj, nH, dxe_dt, dT_dt, fHe, dxe_dz, dT_dz, B, ntot, kB, f_HIon, f_Heat, f_LyA, Peebles, J_LyA;
     if (flag_options->USE_HALO_BOOST)
     {
         B = Boost;
@@ -512,9 +517,9 @@ double EoR_Rate_DM(double z, double Boost, double Delta, struct AstroParams *ast
     fHe = 0.08112582781456953;
 
     P27 = (double)astro_params->Pann27;
-    Pann = P27 * 1.0E-27 * 1.0E-6 / (1.0E9 * Q);
+    Pann = P27 * 1.0E-27 * 1.0E-6 / (1.0E9 * Q); // m^3/s/J
 
-    dEdVdt_Inj = B * Pann * RhoC_c2_2 * pow(1.0 + z, 6.0);
+    dEdVdt_Inj = B * Pann * RhoC_c2_2 * pow(1.0 + z, 6.0); // Again this is in SI unit
 
     nH = 0.19015670534605955 * pow(1.0 + z, 3.0) * (1.0 + Delta);
     Peebles = PeeblesFactor(z, xe, Tk, Delta);
@@ -544,8 +549,12 @@ double EoR_Rate_DM(double z, double Boost, double Delta, struct AstroParams *ast
     {
         return dxe_dz;
     }
-    else
+    else if (GetIon == 0)
     {
         return dT_dz;
+    }
+    else
+    {
+        return J_LyA; // Not ready yet!
     }
 }

@@ -1,5 +1,5 @@
 reload_boost = 0
-reload = 0
+reload = 1
 print_data = 0
 
 # Compute deposition efficiencies from DM annihilation, this largely follows 10.1088/1475-7516/2022/03/012
@@ -10,6 +10,73 @@ from PyLab import Hubble, TimeNow, os
 import py21cmfast as p21c
 from joblib import Parallel, delayed
 import ctypes
+# Compute and save Boost factor
+
+def GetBoost(HMF=0, POWER_SPECTRUM=2):
+    zmin = 4
+    zmax = 70
+    LC_Quantities = ('brightness_temp','Ts_box','xH_box','Tk_box','Boost_box')
+    GLB_Quantities = ('brightness_temp','Ts_box','xH_box','Tk_box', 'Boost_box')
+
+    user_params = p21c.UserParams(
+        HII_DIM = 100,
+        N_THREADS = 1,
+        USE_INTERPOLATION_TABLES = True,
+        HMF = HMF,
+        POWER_SPECTRUM = POWER_SPECTRUM,
+        BOX_LEN = 1000)
+    astro_params = p21c.AstroParams(
+        Pann27 = 1,
+        NU_X_THRESH = 500.0)
+    flag_options = p21c.FlagOptions(
+        USE_MASS_DEPENDENT_ZETA = True,
+        INHOMO_RECO = True,
+        USE_TS_FLUCT = True,
+        USE_HALO_BOOST = True,
+        INHOMO_HALO_BOOST = False)
+    t1 = TimeNow()
+    with p21c.global_params.use(Z_HEAT_MAX = zmax):
+        lc = p21c.run_lightcone(
+            redshift=zmin,
+            max_redshift=zmax,
+            astro_params=astro_params, 
+            flag_options=flag_options,
+            user_params = user_params,
+            lightcone_quantities=LC_Quantities,
+            global_quantities=GLB_Quantities)
+        z = lc.node_redshifts
+        b = lc.global_Boost
+    t2 = TimeNow()
+    print('Time used:', t2 - t1)
+    return z, b
+
+if reload_boost:
+    HMF = [0, 1, 2, 3]
+    PS = [0, 1, 2, 3, 4] # PS=5 doesn't work
+    
+    params = []
+    for idh, hmf in enumerate(HMF):
+        for idp, ps in enumerate(PS):
+            params.append([hmf, ps])
+    params = np.array(params)
+    def kernel(idx):
+        param = params[idx]
+        hmf, ps = param[0], param[1]
+        z, b = GetBoost(HMF=hmf, POWER_SPECTRUM=ps)
+        np.savez('tmp_'+str(idx)+'.npz', z=z, b=b)
+    swap = Parallel(n_jobs = 12)(delayed(kernel)(idx) for idx in np.arange(0, len(params)))
+    lh, lp = len(HMF), len(PS)
+    z = np.load('tmp_0.npz')['z'][::-1]
+    nz = len(z)
+    B = np.zeros([lh, lp, nz])
+    idx = 0
+    for idh in np.arange(0, lh):
+        for idp in np.arange(0, lp):
+            #B[idh, idp, :] = np.load('tmp_0.npz')['b'][::-1] # Previous buggy version, this is so fucked up
+            B[idh, idp, :] = np.load('tmp_'+str(idx)+'.npz')['b'][::-1]
+            idx = idx + 1
+    np.savez('data/BoostTemplates.npz', z = z, HMF = HMF, PS = PS, B = B)
+    os.system('rm tmp_*.npz')
 
 def Load_Data():
     '''
@@ -18,16 +85,6 @@ def Load_Data():
     '''
 
     # 1. Boost factor
-    '''
-    Boost_File = '/Users/cangtao/Desktop/21cmFAST-data/BoostFactor/main.h5'
-    f = h5py.File(Boost_File, 'r')
-    z = f['node_redshifts'][:][::-1]
-    B = f['global_quantities/Boost_box'][:][::-1]
-    HMF = f['user_params'].attrs['HMF']
-    POWER_SPECTRUM = f['user_params'].attrs['POWER_SPECTRUM']
-    f.close()
-    print('Boost template: [HMF, POWER_SPECTRUM] = ', [HMF, POWER_SPECTRUM])
-    '''
     BoostData = np.load('data/BoostTemplates.npz')
     z = BoostData['z']
     HMF = BoostData['HMF']
@@ -100,69 +157,6 @@ def GetEFF_Kernel(idxE=20, idxz=0, spec = 'e', channel='HIon', HMF = 0, PS=2, Us
     fc = Prefix*np.sum((1+zi)**3 * Bi * T / Hi)
     return fc
 
-def GetBoost(HMF=0, POWER_SPECTRUM=2):
-    zmin = 5
-    zmax = 70
-    LC_Quantities = ('brightness_temp','Ts_box','xH_box','Tk_box','Boost_box')
-    GLB_Quantities = ('brightness_temp','Ts_box','xH_box','Tk_box', 'Boost_box')
-
-    user_params = p21c.UserParams(
-        HII_DIM = 100,
-        N_THREADS = 1,
-        USE_INTERPOLATION_TABLES = True,
-        HMF = HMF,
-        POWER_SPECTRUM = POWER_SPECTRUM,
-        BOX_LEN = 1000)
-    astro_params = p21c.AstroParams(
-        Pann27 = 1,
-        NU_X_THRESH = 500.0)
-    flag_options = p21c.FlagOptions(
-        USE_MASS_DEPENDENT_ZETA = True,
-        INHOMO_RECO = True,
-        USE_TS_FLUCT = True,
-        USE_HALO_BOOST = True,
-        INHOMO_HALO_BOOST = False)
-    t1 = TimeNow()
-    with p21c.global_params.use(Z_HEAT_MAX = zmax):
-        lc = p21c.run_lightcone(
-            redshift=zmin,
-            max_redshift=zmax,
-            astro_params=astro_params, 
-            flag_options=flag_options,
-            user_params = user_params,
-            lightcone_quantities=LC_Quantities,
-            global_quantities=GLB_Quantities)
-        z = lc.node_redshifts
-        b = lc.global_Boost
-    t2 = TimeNow()
-    print('Time used:', t2 - t1)
-    return z, b
-
-if reload_boost:
-    HMF = [0, 1, 2, 3]
-    PS = [0, 1, 2, 3, 4] # PS=5 doesn't work
-    
-    params = []
-    for idh, hmf in enumerate(HMF):
-        for idp, ps in enumerate(PS):
-            params.append([hmf, ps])
-    params = np.array(params)
-    def kernel(idx):
-        param = params[idx]
-        hmf, ps = param[0], param[1]
-        z, b = GetBoost(HMF=hmf, POWER_SPECTRUM=ps)
-        np.savez('tmp_'+str(idx)+'.npz', z=z, b=b)
-    swap = Parallel(n_jobs = 12)(delayed(kernel)(idx) for idx in np.arange(0, len(params)))
-    lh, lp = len(HMF), len(PS)
-    z = np.load('tmp_0.npz')['z'][::-1]
-    nz = len(z)
-    B = np.zeros([lh, lp, nz])
-    for idh in np.arange(0, lh):
-        for idp in np.arange(0, lp):
-            B[idh, idp, :] = np.load('tmp_0.npz')['b'][::-1]
-    np.savez('data/BoostTemplates.npz', z = z, HMF = HMF, PS = PS, B = B)
-    os.system('rm tmp_*.npz')
-
 def GetEFF():
     UseBoost = [0, 1]
     spec = ['y', 'e']
@@ -196,17 +190,6 @@ def GetEFF():
     np.savez('data/EEE_Table.npz', fc = fc, HMF=HMF,PS=PS, Ek=Ek, z=z)
 
 if reload:GetEFF()
-
-'''
-def PrintData(UseBoost=1, spec=0, channel=1, HMF=0, PS=2, Initialize=0):
-    EffData = np.load('data/EEE_Table.npz')
-    Ek = EffData['Ek']
-    z = EffData['z']
-    fsc = EffData['fc'][UseBoost, spec, channel, HMF, PS, :, :]
-    print(fsc.shape)
-
-PrintData()
-'''
 
 def Load_EFF_Data(spec = 'e', channel='HIon', HMF = 0, PS=2, UseBoost = 0, process = 'ann'):
     # First get name

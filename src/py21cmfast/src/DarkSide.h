@@ -260,10 +260,15 @@ double BoostFactor(double z, double growthf, double delta, double sigma2, struct
     return res;
 }
 
-
 double Read_EFF_Tab(int idxz, int idxE, double *Tab, int UseLog)
-{
-    // A way to read 2D table, I can't get pointer to work
+{    /* 
+    A way to read 2D EFF table, I can't get pointer to work
+    ---- inputs ----
+    idxz : z index
+    idxE : Ek index
+    Tab : EFF Table
+    UseLog : return log of fc, useful if u want to do subsequent interpolation in log space
+    */
     int id;
     double r;
     if ((idxE > Ek_axis_Size - 1) || (idxz > Redshift_Size - 1))
@@ -311,8 +316,10 @@ int Find_Sign(double x)
 
 int Find_Index_1D(double *Tab, double x, int nx)
 {
-    // Find closest left element index
-    // return -1 if not in range
+    /* 
+    From table Tab with length nx, find closest left element index for x
+    return -1 if not in range
+    */
     double x1, x2, x3;
     int id1, id2, id3, Stop, s1, s2, s3, idx, count;
     Stop = 0;
@@ -356,17 +363,13 @@ int Find_Index_1D(double *Tab, double x, int nx)
 
 double Interp_2D(double Ek, double z, double *Tab)
 {
-    /* Interpolate (in log) from a 2D table
-     -- inputs --
-     m : m target
-     z : z target
-     Ek_GeV_axis : m axis pointer
-     z_axis : z axis pointer
-     Tab : Data Table, index : Tab[z_id][m_id]
-     Overflow_Handle : decide what to do when m or z is not in range
-                       0 : Raise error and exit
-                       1 : return 0 when z is not in range, if m is also not in range then raise error
-    */
+    /* 
+    Interpolate (in log) from a 2D table
+    -- inputs --
+        Ek : kinetic energy
+        z : redshift
+        Tab : EFF table
+     */
     int eid1, eid2, zid1, zid2;
     double le, le1, le2, lz, lz1, lz2, f11, f12, f21, f22, f1, f2, F1, F2, f;
     eid1 = Find_Index_1D(Ek_GeV_axis, Ek, Ek_axis_Size);
@@ -398,11 +401,11 @@ double Interp_2D(double Ek, double z, double *Tab)
     f21 = Read_EFF_Tab(zid2, eid1, Tab, 1);
     f22 = Read_EFF_Tab(zid2, eid2, Tab, 1);
 
-    // fix m1
+    // fix E1
     f1 = f11;
     f2 = f21;
     F1 = (f2 - f1) / (lz2 - lz1) * (lz - lz1) + f1;
-    // fix m2
+    // fix E2
     f1 = f12;
     f2 = f22;
     F2 = (f2 - f1) / (lz2 - lz1) * (lz - lz1) + f1;

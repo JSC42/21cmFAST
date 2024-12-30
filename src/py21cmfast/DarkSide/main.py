@@ -1,20 +1,28 @@
 reload_boost = 0
-reload = 1
+reload_EFF = 0
 print_data = 0
 
-# Compute deposition efficiencies from DM annihilation, this largely follows 10.1088/1475-7516/2022/03/012
+'''
+Compute deposition efficiencies from DM annihilation, this largely follows 10.1088/1475-7516/2022/03/012
+Pipeline: 
+    Compute Boost factors with GetBoost
+    Compute EFF with GetEFF which calls GetEFF_Kernel
+    main prints out interpolation table and functions to c_products/Tables.h
+    Move c_products/Tables.h to 21cmFAST src
+'''
 import numpy as np
 import h5py
-import matplotlib.pyplot as plt
 from PyLab import Hubble, TimeNow, os
 import py21cmfast as p21c
 from joblib import Parallel, delayed
-import ctypes
-# Compute and save Boost factor
+main_path = '/Users/cangtao/FileVault/GitHub/21cmFAST/src/py21cmfast/DarkSide/'
+if __name__ != '__main__' and (reload_boost or reload_EFF or print_data):
+    raise Exception('You are importing this as a lib, in this case thou shalt not reload anything')
 
 def GetBoost(HMF=0, POWER_SPECTRUM=2):
+    # Compute Boost factor
     zmin = 4
-    zmax = 70
+    zmax = 100
     LC_Quantities = ('brightness_temp','Ts_box','xH_box','Tk_box','Boost_box')
     GLB_Quantities = ('brightness_temp','Ts_box','xH_box','Tk_box', 'Boost_box')
 
@@ -52,7 +60,7 @@ def GetBoost(HMF=0, POWER_SPECTRUM=2):
 
 if reload_boost:
     HMF = [0, 1, 2, 3]
-    PS = [0, 1, 2, 3, 4] # PS=5 doesn't work
+    PS = [0, 1, 2, 3, 4] # PS=5 doesn't work because the k range is not enough for our small halo mass down to 1E-6
     
     params = []
     for idh, hmf in enumerate(HMF):
@@ -75,7 +83,7 @@ if reload_boost:
             #B[idh, idp, :] = np.load('tmp_0.npz')['b'][::-1] # Previous buggy version, this is so fucked up
             B[idh, idp, :] = np.load('tmp_'+str(idx)+'.npz')['b'][::-1]
             idx = idx + 1
-    np.savez('data/BoostTemplates.npz', z = z, HMF = HMF, PS = PS, B = B)
+    np.savez(main_path + 'data/BoostTemplates.npz', z = z, HMF = HMF, PS = PS, B = B)
     os.system('rm tmp_*.npz')
 
 def Load_Data():
@@ -85,14 +93,14 @@ def Load_Data():
     '''
 
     # 1. Boost factor
-    BoostData = np.load('data/BoostTemplates.npz')
+    BoostData = np.load(main_path + 'data/BoostTemplates.npz')
     z = BoostData['z']
     HMF = BoostData['HMF']
     PS = BoostData['PS']
     B = BoostData['B']
     
     # 2. Transfer function
-    Transfer_File = 'data/TransferFunctions.h5'
+    Transfer_File = main_path + 'data/TransferFunctions.h5'
     f = h5py.File(Transfer_File, 'r')
     TF = f['T_Array'][:]
     TF_z = f['Axis/z'][:]
@@ -139,7 +147,8 @@ def GetEFF_Kernel(idxE=20, idxz=0, spec = 'e', channel='HIon', HMF = 0, PS=2, Us
         raise Exception('Wrong choice of channel')
     if not UseBoost: B = 1
     Prefix = H * Ek / (B * (m + Ek) * (1+z)**3)
-
+    #Prefix = H * Ek / (B * ( Ek) * (1+z)**3) # I think this what's used in HyRec, it's the fraction injected KINETIC energy
+    
     # Now the next bit
     zi = DataSet['TransferData']['z']
     
@@ -158,6 +167,9 @@ def GetEFF_Kernel(idxE=20, idxz=0, spec = 'e', channel='HIon', HMF = 0, PS=2, Us
     return fc
 
 def GetEFF():
+    '''
+    Compute all EFF fc, format: fc[UseBoost, Species, Channel, HMF, PS, Energy, redshift]
+    '''
     UseBoost = [0, 1]
     spec = ['y', 'e']
     channel = ['HIon', 'LyA', 'Heat']
@@ -185,13 +197,18 @@ def GetEFF():
                                 fc[idb, ids, idc, idh, idp, ide, idz] = GetEFF_Kernel(
                                     idxE=ide, idxz=idz, spec=spec_, channel=channel_, HMF=HMF_, PS=PS_, UseBoost=UseBoost_)
     t2 = TimeNow()
-    print(fc.shape)
     print('Time used:', t2 - t1)
-    np.savez('data/EEE_Table.npz', fc = fc, HMF=HMF,PS=PS, Ek=Ek, z=z)
+    np.savez(main_path + 'data/EEE_Table.npz', fc = fc, HMF=HMF,PS=PS, Ek=Ek, z=z)
 
-if reload:GetEFF()
+if reload_EFF:GetEFF()
 
 def Load_EFF_Data(spec = 'e', channel='HIon', HMF = 0, PS=2, UseBoost = 0, process = 'ann'):
+    '''
+    Read pre-computed EFF Table
+    output:
+        name: name of dataset, to be used for c. Example: EFF_ann_e_HIon_HMG
+        fc: EFF, format fc[Energy, redshift]
+    '''
     # First get name
     s1 = 'EFF_'+process+'_'+spec+'_'+channel
     s2 = '_'+str(HMF) + str(PS) if UseBoost else '_HMG'
@@ -206,10 +223,15 @@ def Load_EFF_Data(spec = 'e', channel='HIon', HMF = 0, PS=2, UseBoost = 0, proce
         cid = 2
     else:
         raise Exception('Wrong channel')
-    fc = np.load('data/EEE_Table.npz')['fc'][UseBoost, sid, cid, HMF, PS, :, :]
+    fc = np.load(main_path + 'data/EEE_Table.npz')['fc'][UseBoost, sid, cid, HMF, PS, :, :]
     return name, fc
 
 def PrintData_Kernel(name, fc, filename):
+    '''
+    Print EFF to a file, example:
+    double EFF_ann_e_HIon_HMG[2520] = {
+      9.7416E-04, 9.5136E-04, ...};
+    '''
     fc_shape = np.shape(fc)
     fc_size = str(int(fc_shape[0] * fc_shape[1]))
     ne = fc_shape[0]
@@ -228,8 +250,11 @@ def PrintData_Kernel(name, fc, filename):
     file.close()
 
 def Print_C_funtion(filename):
-    # Print function
-    cmd = 'cat c_products/swap.c >> '+filename
+    '''
+    Called after printing (and defining) table data, print c function that copies an EFF table to another array, the latter is used
+    for interpolation based on user input of z, E, PS, HMF, channel, etc
+    '''
+    cmd = 'cat c_products/swap.c >> '+filename # defines the function that copies array
     os.system(cmd)
     file = open(filename, 'a')
     specs = ['y', 'e']
@@ -268,7 +293,10 @@ def Print_C_funtion(filename):
     
     file.close()
 
-def main(filename = 'c_products/Tables.h'):
+def main(filename = main_path + 'c_products/Tables.h'):
+    '''
+    The main function, load and print all tables and functions
+    '''
     EFF = np.load('data/EEE_Table.npz')
     Ek_GeV = EFF['Ek']
     z = EFF['z']
@@ -291,7 +319,8 @@ def main(filename = 'c_products/Tables.h'):
         if idz != nz-1: s += ','
     s += '};'
     print(s, file=file)
-    # Print E
+    
+    # Print Ek
     s = 'double Ek_GeV_axis[Ek_axis_Size] = {'
     for ide, Ek_ in enumerate(Ek_GeV):
         s += "{0:.4E}".format(Ek_)
@@ -299,6 +328,8 @@ def main(filename = 'c_products/Tables.h'):
     s += '};'
     print(s, file=file)
     file.close()
+
+    # Print EFF
     for spec in ['e', 'y']:
         for channel in ['HIon', 'LyA', 'Heat']:
             # BoostLess
@@ -308,6 +339,8 @@ def main(filename = 'c_products/Tables.h'):
                 for PS in [0, 1, 2, 3, 4]:
                     name, fc = Load_EFF_Data(spec=spec,channel=channel, HMF=HMF, PS=PS, UseBoost=1)
                     PrintData_Kernel(name=name,fc=fc,filename=filename)
+    
+    # Now that we printed table definitions, let's print functions that pre[ares them for interpolation
     Print_C_funtion(filename)
 
 if print_data:main()

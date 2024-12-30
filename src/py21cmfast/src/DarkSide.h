@@ -504,6 +504,21 @@ double PeeblesFactor(double z, double xe, double Tk, double Delta)
     return result;
 }
 
+double Compute_JLyA(double z, double dEdVdt_LyA)
+{
+    /*
+    Compute J_LyA from DM following 1603.06795 and 10.1088/1475-7516/2024/01/005
+    */
+    double H, LightSpeed, nu_LyA, Q, ELyA, r;
+    Q = 1.602176634E-19;
+    LightSpeed = 299792458.0;
+    nu_LyA = 2.466349E+15; // Frequency in Hz of a LyA photon with energy 10.2 eV
+    H = hubble(z);
+    ELyA = 10.2 * Q; // LyA energy 10.2 eV in J
+    r = LightSpeed * dEdVdt_LyA / (4.0 * PI * H * nu_LyA * ELyA) * 1.0E-4; //1.0E-4 converts m^-2 to cm^-2
+    return r;
+}
+
 double EoR_Rate_DM(double z, double Boost, double Delta, struct AstroParams *astro_params, struct FlagOptions *flag_options, struct UserParams *user_params, double xe, double Tk, double dt_dzp, int GetIon)
 {
     /*
@@ -568,8 +583,14 @@ double EoR_Rate_DM(double z, double Boost, double Delta, struct AstroParams *ast
     {
         return dT_dz;
     }
+    else if (GetIon == 2)
+    {
+        J_LyA = Compute_JLyA(z, f_LyA * dEdVdt_Inj);
+        return J_LyA;
+    }
     else
     {
-        return J_LyA; // Not ready yet!
+        LOG_ERROR("Error: wrong choice of GetIon, must be [0, 1, 2]!");
+        Throw(ValueError);
     }
 }

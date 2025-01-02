@@ -53,14 +53,10 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
         {
             writeAstroParams(flag_options, astro_params);
         }
-        if (print_debug_info)
-        {
-            printf("%f\n", redshift);
-        }
 
         // All these are variables for DM Boost
         double Trad_inv, Halo_Boost_Tab[Boost_Interp_Table_Size], Reset_MinM, Halo_Boost_User;
-        double Delta_Min, Delta_Max, DM_sigmaMmax, Delta_Width, Grid_Delta, Halo_Boost_ave, dxedz_dm, dtdz_dm, J_LyA_dm;
+        double Delta_Min, Delta_Max, DM_sigmaMmax, Delta_Width, Grid_Delta, Halo_Boost_ave, dxedz_dm, dtdz_dm, j_alpha_dm;
         int idx, R_values_ready;
 
         // Initialising some variables
@@ -564,7 +560,6 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                             this_spin_temp->Tk_box[HII_R_INDEX(i, j, k)] = TK;
                             this_spin_temp->x_e_box[HII_R_INDEX(i, j, k)] = xe;
                             // compute the spin temperature
-                            // No impact from Excess Radio Background yet because now Trad=0
                             this_spin_temp->Ts_box[HII_R_INDEX(i, j, k)] = get_Ts(redshift,
                                                                                   perturbed_field->density[HII_R_INDEX(i, j, k)] * inverse_growth_factor_z * growth_factor_zp,
                                                                                   TK, xe, 0, &curr_xalpha);
@@ -2275,7 +2270,6 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                         {
                             Halo_Boost_Tab[idx] = Halo_Boost_User * Halo_Boost_Tab[idx] / Halo_Boost_ave;
                         }
-
                         if (print_debug_info)
                         {
                             printf("%f  %E  %E  %E\n", redshift, Halo_Boost_User, Delta_Min, Delta_Max);
@@ -2366,7 +2360,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                                 }
                                 dxedz_dm = EoR_Rate_DM(zpp_for_evolve_list[0], this_spin_temp->Boost_box[box_ct], Grid_Delta, astro_params, flag_options, user_params, x_e, T, dt_dzp, 1);
                                 dtdz_dm = EoR_Rate_DM(zpp_for_evolve_list[0], this_spin_temp->Boost_box[box_ct], Grid_Delta, astro_params, flag_options, user_params, x_e, T, dt_dzp, 0);
-                                J_LyA_dm = EoR_Rate_DM(zpp_for_evolve_list[0], this_spin_temp->Boost_box[box_ct], Grid_Delta, astro_params, flag_options, user_params, x_e, T, dt_dzp, 2);
+                                j_alpha_dm = EoR_Rate_DM(zpp_for_evolve_list[0], this_spin_temp->Boost_box[box_ct], Grid_Delta, astro_params, flag_options, user_params, x_e, T, dt_dzp, 2);
 
                                 // add prefactors
                                 dxheat_dt_box[box_ct] *= const_zp_prefactor;
@@ -2450,7 +2444,7 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                                 this_spin_temp->x_e_box[box_ct] = x_e;
                                 this_spin_temp->Tk_box[box_ct] = T;
 
-                                J_alpha_tot = (dxlya_dt_box[box_ct] + dstarlya_dt_box[box_ct]); // not really d/dz, but the lya flux
+                                J_alpha_tot = (dxlya_dt_box[box_ct] + dstarlya_dt_box[box_ct] + j_alpha_dm); // not really d/dz, but the lya flux
                                 if (flag_options->USE_MINI_HALOS)
                                 {
                                     J_alpha_tot_MINI = (dxlya_dt_box_MINI[box_ct] + dstarlya_dt_box_MINI[box_ct]); // not really d/dz, but the lya flux
@@ -2471,6 +2465,14 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
                                 {
                                     xa_tilde_fast_arg = xa_tilde_prefactor * (J_alpha_tot + J_alpha_tot_MINI) *
                                                         pow(1.0 + 2.98394 * xi_power + 1.53583 * xi_power * xi_power + 3.85289 * xi_power * xi_power * xi_power, -1.);
+                                    /*
+                                    When not using relative velocities this can give nan
+                                    if (isfinite(J_alpha_tot_MINI) == 0)
+                                    {
+                                        printf("J_alpha_tot_MINI is infinite or nan, crash imminent, J_alpha_tot_MINI = %E\n", J_alpha_tot_MINI);
+                                    }
+                                    */
+    
                                 }
                                 else
                                 {
@@ -2733,10 +2735,32 @@ int ComputeTsBox(float redshift, float prev_redshift, struct UserParams *user_pa
             }
 
             // ---- Computing averaged quantities ----
+            /*
+            if (print_debug_info)
+            {
+                double Tk_ave_debug, xe_ave_debug, Ts_ave_debug;
+                FILE *OutputFile;
+                OutputFile = fopen("Runtime_log_tmp.txt", "a");
+                Tk_ave_debug = 0.0;
+                Ts_ave_debug = 0.0;
+                xe_ave_debug = 0.0;
+                for (box_ct = 0; box_ct < HII_TOT_NUM_PIXELS; box_ct++)
+                {
+                    Ts_ave_debug += this_spin_temp->Ts_box[box_ct];
+                    Tk_ave_debug += this_spin_temp->Tk_box[box_ct];
+                    xe_ave_debug += this_spin_temp->x_e_box[box_ct];
+                }
+                
+                Tk_ave_debug /= (double)HII_TOT_NUM_PIXELS;
+                Ts_ave_debug /= (double)HII_TOT_NUM_PIXELS;
+                xe_ave_debug /= (double)HII_TOT_NUM_PIXELS;
+                fprintf(OutputFile, "%f  %E  %E  %E  %E\n", redshift, Halo_Boost_User, Tk_ave_debug, Ts_ave_debug, xe_ave_debug);
+                fclose(OutputFile);
+            }
+            */
 
             for (box_ct = 0; box_ct < HII_TOT_NUM_PIXELS; box_ct++)
             {
-                // #1: Gas temperature
                 if (isfinite(this_spin_temp->Ts_box[box_ct]) == 0)
                 {
                     LOG_ERROR("Estimated spin temperature is either infinite of NaN!");

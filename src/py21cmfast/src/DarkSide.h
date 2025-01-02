@@ -516,6 +516,10 @@ double Compute_JLyA(double z, double dEdVdt_LyA)
     H = hubble(z);
     ELyA = 10.2 * Q; // LyA energy 10.2 eV in J
     r = LightSpeed * dEdVdt_LyA / (4.0 * PI * H * nu_LyA * ELyA) * 1.0E-4; //1.0E-4 converts m^-2 to cm^-2
+    if (isfinite(r) == 0)
+    {
+        printf("DarkSide: JLyA is infinite or nan, crash imminent, J_LyA = %E\n", r);
+    }
     return r;
 }
 

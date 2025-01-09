@@ -520,6 +520,9 @@ double Compute_JLyA(double z, double dEdVdt_LyA)
     {
         printf("DarkSide: JLyA is infinite or nan, crash imminent, J_LyA = %E\n", r);
     }
+    // Test the impact of LyA, give noisy shout out to make sure user knows this
+    // r = 0.0;
+    // printf("Test version with JLyA = 0, current z = %f\n", z);
     return r;
 }
 

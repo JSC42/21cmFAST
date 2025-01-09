@@ -76,5 +76,4 @@ plt.xticks(size=FontSize)
 plt.yticks(size=FontSize)
 plt.legend(fontsize=FontSize,loc = 'lower left')
 plt.tight_layout()
-
-plt.show()
+plt.savefig('/Users/cangtao/Desktop/tmp.pdf')

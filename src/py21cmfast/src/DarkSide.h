@@ -1,8 +1,29 @@
 // Halo Boost Factor module
 #define print_debug_info 0
+#define Use_Conde_Concentration 0
 #define Boost_nmh 1000
 #define Boost_Interp_Table_Size 200
 #include "Tables.h"
+
+double Halo_Concentration_Conde(double m, double z)
+{
+    /*
+    Halo concentration at z=0 following Eq.1 of MNRAS 442, 2271–2277 (2014)
+    */
+   double x, c0, c1, c2, c3, c4, c5, h, r;
+   h = 0.6766;
+   x = log(m*h);
+   c0 = 37.5153;
+   c1 = -1.5093;
+   c2 = 1.636E-2;
+   c3 = 3.66E-4;
+   c4 = -2.89237E-5;
+   c5 = 5.32E-7;
+   
+   r = c0 + c1 * x + c2 * pow(x, 2.0) + c3 * pow(x, 3.0) + c4 * pow(x, 4.0) + c5 * pow(x, 5.0);
+   r = r / (1.0+z);
+   return r;
+}
 
 double HaloProfile_Kernel(double z, double mh, double r, int ProfileType)
 {
@@ -97,6 +118,11 @@ double HaloProfile_Integrator(double z, double mh)
     Delta_C = 18. * pow(pi, 2.) + 82. * d - 39. * pow(d, 2.);
     log10_c = 1.071 - 0.098 * (log10(m) - 12.);
     c = pow(10., log10_c) / zp; // concentration, see appdx.A of Zip.et for the additional (1+z) factor
+    if (Use_Conde_Concentration)
+    {
+        c = Halo_Concentration_Conde(mh, z);
+        printf("Using Conde concentration model\n");
+    }
     delta_c = Delta_C * pow(c, 3.) / (3. * (log(1. + c) - c / (1. + c)));
 
     rv1 = 0.784 * pow(m * h / 1.0e8, 1. / 3.);
